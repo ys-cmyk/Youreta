@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --background: #0a0a0f;
+  --foreground: #e6ecff;
+  --card-bg: #0f172a;
+  --accent: #6366f1;
+  --accent-bright: #818cf8;
+  --going: #10b981;
+  --maybe: #f59e0b;
+  --declined: #6b7280;
+  --font-stack: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card-bg);
+  --color-accent: var(--accent);
+  --color-accent-bright: var(--accent-bright);
+  --font-sans: var(--font-stack);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-stack);
+}
+
+/* Leaflet renders inside a fixed-height container; ensure tiles sit below UI. */
+.leaflet-container {
+  background: #0b1020;
+  font-family: inherit;
+}
+
+@keyframes ec-ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.ec-pulse-dot {
+  position: relative;
+}
+.ec-pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ec-ping 1.8s ease-out infinite;
+}
