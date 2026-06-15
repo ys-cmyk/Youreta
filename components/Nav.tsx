@@ -1,11 +1,23 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+
+async function getCurrentUser() {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user;
+  } catch {
+    // Never let the global nav take down every page over an auth/config hiccup.
+    return null;
+  }
+}
 
 export async function Nav() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   return (
     <header className="sticky top-0 z-[1000] border-b border-white/10 bg-background/85 backdrop-blur">
