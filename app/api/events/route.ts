@@ -21,32 +21,21 @@ export async function POST(request: NextRequest) {
   }
   const e = parsed.data;
 
+  // Title falls back to the place name; ensure something non-empty since the
+  // column is NOT NULL.
+  const title = (e.title?.trim() || e.venueName?.trim() || "Destination") as string;
+
   const { data, error } = await supabase
     .from("ec_events")
     .insert({
       host_id: user.id,
-      title: e.title,
-      description: e.description ?? null,
+      title,
       venue_name: e.venueName ?? null,
       venue_address: e.venueAddress ?? null,
       lat: e.lat,
       lng: e.lng,
-      geofence_radius_m: e.geofenceRadiusM,
-      starts_at: e.startsAt,
-      ends_at: e.endsAt ?? null,
-      // --- Luma parity fields ---
-      cover_image_url: e.coverImageUrl ?? null,
-      location_type: e.locationType ?? "in_person",
-      virtual_url: e.locationType === "virtual" ? e.virtualUrl ?? null : null,
-      timezone: e.timezone ?? null,
-      capacity: e.capacity ?? null,
-      waitlist_enabled: e.waitlistEnabled ?? false,
-      requires_approval: e.requiresApproval ?? false,
-      visibility: e.visibility ?? "public",
-      is_paid: e.isPaid ?? false,
-      price_cents: e.isPaid ? e.priceCents ?? null : null,
-      currency: e.isPaid ? e.currency ?? null : null,
-      category: e.category ?? null,
+      // starts_at is NOT NULL; this app no longer uses it, so anchor to now.
+      starts_at: new Date().toISOString(),
     })
     .select("id")
     .single();

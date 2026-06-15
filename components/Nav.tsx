@@ -29,13 +29,13 @@ export async function Nav() {
           {user ? (
             <>
               <Link href="/events" className="text-gray-300 hover:text-white">
-                Events
+                Destinations
               </Link>
               <Link
                 href="/events/new"
                 className="rounded-full bg-accent px-3 py-1.5 font-semibold text-white hover:bg-accent-bright"
               >
-                Host event
+                New destination
               </Link>
               <form action="/auth/signout" method="post">
                 <button

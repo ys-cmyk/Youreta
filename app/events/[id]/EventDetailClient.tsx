@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import type { Attendee, EventRow, LocationPing, Rsvp, RsvpStatus } from "@/lib/types";
+import type { EventRow, LocationPing, Participant, Rsvp } from "@/lib/types";
 import { distanceMeters, formatDistance } from "@/lib/geo";
-import { PING_INTERVAL_MS, STALE_PING_MS } from "@/lib/constants";
+import { ARRIVAL_RADIUS_M, PING_INTERVAL_MS, STALE_PING_MS } from "@/lib/constants";
 import type { LivePerson } from "@/components/LiveMap";
 
 const LiveMap = dynamic(() => import("@/components/LiveMap"), {
@@ -13,12 +13,6 @@ const LiveMap = dynamic(() => import("@/components/LiveMap"), {
     <div className="h-80 animate-pulse rounded-xl border border-white/10 bg-card" />
   ),
 });
-
-const STATUS_LABEL: Record<RsvpStatus, string> = {
-  going: "Going",
-  maybe: "Maybe",
-  declined: "Can't go",
-};
 
 function getPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
@@ -34,6 +28,7 @@ function getPosition(): Promise<GeolocationPosition> {
   });
 }
 
+// ISO -> value for a <input type="datetime-local"> in the user's local zone.
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -53,53 +48,51 @@ export default function EventDetailClient({
   event,
   currentUserId,
   isHost,
-  initialAttendees,
+  initialParticipants,
   initialMyRsvp,
 }: {
   event: EventRow;
   currentUserId: string;
   isHost: boolean;
-  initialAttendees: Attendee[];
+  initialParticipants: Participant[];
   initialMyRsvp: Rsvp | null;
 }) {
-  const venue = { lat: event.lat, lng: event.lng };
+  const destination = { lat: event.lat, lng: event.lng };
 
+  const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [myRsvp, setMyRsvp] = useState<Rsvp | null>(initialMyRsvp);
   const [etaInput, setEtaInput] = useState(toLocalInput(initialMyRsvp?.eta ?? null));
   const [savingRsvp, setSavingRsvp] = useState(false);
 
-  const myInitialCheckin =
-    initialAttendees.find((a) => a.rsvp.user_id === currentUserId)?.checkin ?? null;
-  const [checkedIn, setCheckedIn] = useState(myInitialCheckin !== null);
-  const [checkinMsg, setCheckinMsg] = useState("");
-  const [checkinOk, setCheckinOk] = useState<boolean | null>(
-    myInitialCheckin ? true : null
-  );
-  const [checkingIn, setCheckingIn] = useState(false);
-
-  // Live pings keyed by user_id (current position of everyone en route).
+  // Live pings keyed by user_id (current position of everyone converging).
   const [livePings, setLivePings] = useState<Record<string, LocationPing>>(() => {
     const seed: Record<string, LocationPing> = {};
-    for (const a of initialAttendees) if (a.lastPing) seed[a.rsvp.user_id] = a.lastPing;
+    for (const p of initialParticipants) if (p.lastPing) seed[p.rsvp.user_id] = p.lastPing;
     return seed;
   });
 
   const nameByUser = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const a of initialAttendees) m[a.rsvp.user_id] = a.name;
+    for (const p of participants) m[p.rsvp.user_id] = p.name;
     return m;
-  }, [initialAttendees]);
+  }, [participants]);
+
+  const etaByUser = useMemo(() => {
+    const m: Record<string, string | null> = {};
+    for (const p of participants) m[p.rsvp.user_id] = p.rsvp.eta;
+    return m;
+  }, [participants]);
 
   // `now` is refreshed by the ping poll below so staleness/distance re-evaluate
   // over time without calling an impure clock during render.
   const [now, setNow] = useState(() => Date.now());
 
+  const joined = myRsvp !== null;
   const sharing = myRsvp?.share_location ?? false;
 
-  // --- RSVP save ---------------------------------------------------------
+  // --- Save participation (join / update eta / toggle sharing) -----------
   const saveRsvp = useCallback(
-    async (next: { status?: RsvpStatus; eta?: string | null; shareLocation?: boolean }) => {
-      const status = next.status ?? myRsvp?.status ?? "going";
+    async (next: { eta?: string | null; shareLocation?: boolean }) => {
       const eta =
         next.eta !== undefined
           ? next.eta
@@ -112,61 +105,31 @@ export default function EventDetailClient({
       const res = await fetch("/api/rsvps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: event.id, status, eta, shareLocation }),
+        body: JSON.stringify({ eventId: event.id, eta, shareLocation }),
       });
       const json = await res.json();
       setSavingRsvp(false);
-      if (res.ok) setMyRsvp(json.rsvp);
+      if (res.ok) {
+        const rsvp = json.rsvp as Rsvp;
+        setMyRsvp(rsvp);
+        // Reflect my latest row in the participant list immediately.
+        setParticipants((prev) => {
+          const mine = prev.find((p) => p.rsvp.user_id === currentUserId);
+          if (mine) {
+            return prev.map((p) =>
+              p.rsvp.user_id === currentUserId ? { ...p, rsvp } : p
+            );
+          }
+          return [...prev, { rsvp, name: "You", lastPing: null }];
+        });
+      }
     },
-    [event.id, etaInput, myRsvp]
+    [event.id, etaInput, myRsvp, currentUserId]
   );
 
-  // --- Check in ----------------------------------------------------------
-  async function handleCheckIn() {
-    setCheckingIn(true);
-    setCheckinMsg("");
-    try {
-      const pos = await getPosition();
-      const res = await fetch("/api/checkins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId: event.id,
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setCheckinOk(false);
-        setCheckinMsg(json.error ?? "Check-in failed.");
-      } else if (json.ok) {
-        setCheckedIn(true);
-        setCheckinOk(true);
-        setCheckinMsg(`Checked in! You were ${formatDistance(json.distance_m)} away.`);
-      } else {
-        setCheckinOk(false);
-        setCheckinMsg(
-          `You're ${formatDistance(json.distance_m)} away — get within ${formatDistance(
-            json.radius_m
-          )} to check in.`
-        );
-      }
-    } catch (err) {
-      setCheckinOk(false);
-      setCheckinMsg(
-        err instanceof GeolocationPositionError || (err as Error)?.message
-          ? "Couldn't get your location. Allow location access and try again."
-          : "Check-in failed."
-      );
-    } finally {
-      setCheckingIn(false);
-    }
-  }
-
-  // --- Broadcast my location while sharing & not yet checked in ----------
+  // --- Broadcast my location while sharing -------------------------------
   useEffect(() => {
-    if (!sharing || checkedIn) return;
+    if (!sharing) return;
     let cancelled = false;
 
     async function pushPing() {
@@ -194,7 +157,7 @@ export default function EventDetailClient({
       cancelled = true;
       clearInterval(t);
     };
-  }, [sharing, checkedIn, event.id]);
+  }, [sharing, event.id]);
 
   // --- Poll everyone's latest pings for the live map ---------------------
   useEffect(() => {
@@ -220,7 +183,8 @@ export default function EventDetailClient({
   const people: LivePerson[] = useMemo(() => {
     return Object.values(livePings).map((p) => {
       const stale = now - new Date(p.created_at).getTime() > STALE_PING_MS;
-      const dist = distanceMeters({ lat: p.lat, lng: p.lng }, venue);
+      const dist = distanceMeters({ lat: p.lat, lng: p.lng }, destination);
+      const arrived = dist <= ARRIVAL_RADIUS_M;
       const isMe = p.user_id === currentUserId;
       const baseName = nameByUser[p.user_id] ?? "Guest";
       return {
@@ -229,140 +193,49 @@ export default function EventDetailClient({
         lat: p.lat,
         lng: p.lng,
         stale,
+        arrived,
         distanceLabel: formatDistance(dist),
+        etaLabel: etaByUser[p.user_id] ? formatTime(etaByUser[p.user_id]) : null,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [livePings, now, currentUserId, nameByUser, venue.lat, venue.lng]);
+  }, [livePings, now, currentUserId, nameByUser, etaByUser, destination.lat, destination.lng]);
 
-  const goingCount = initialAttendees.filter((a) => a.rsvp.status === "going").length;
-  const checkedInCount = initialAttendees.filter((a) => a.checkin).length;
-
-  const isVirtual = event.location_type === "virtual";
-  const priceLabel =
-    event.is_paid && event.price_cents != null
-      ? `${(event.price_cents / 100).toLocaleString(undefined, {
-          style: "currency",
-          currency: event.currency || "USD",
-        })}`
-      : event.is_paid
-      ? "Paid"
-      : null;
+  const arrivedCount = people.filter((p) => p.arrived).length;
 
   return (
     <div className="space-y-6">
       <header>
-        {event.cover_image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={event.cover_image_url}
-            alt=""
-            className="mb-4 h-48 w-full rounded-xl border border-white/10 object-cover"
-          />
-        )}
-        <div className="text-xs uppercase tracking-wide text-accent-bright">
-          {new Date(event.starts_at).toLocaleString(undefined, {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })}
-          {event.timezone ? ` · ${event.timezone}` : ""}
-        </div>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">{event.title}</h1>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          {event.category && (
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-gray-200">
-              {event.category}
-            </span>
-          )}
-          {isVirtual && (
-            <span className="rounded-full bg-accent/15 px-2.5 py-1 text-xs font-semibold text-accent-bright">
-              Virtual
-            </span>
-          )}
-          {event.visibility !== "public" && (
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold capitalize text-gray-200">
-              {event.visibility}
-            </span>
-          )}
-          {priceLabel && (
-            <span className="rounded-full bg-going/15 px-2.5 py-1 text-xs font-semibold text-going">
-              {priceLabel}
-            </span>
-          )}
-        </div>
-
-        {isVirtual ? (
-          event.virtual_url && (
-            <p className="mt-2 text-gray-300">
-              💻{" "}
-              <a
-                href={event.virtual_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-accent-bright underline underline-offset-2 hover:text-accent"
-              >
-                Join online
-              </a>
-            </p>
-          )
-        ) : (
-          event.venue_name && (
-            <p className="mt-1 text-gray-300">
-              📍 {event.venue_name}
-              {event.venue_address ? ` · ${event.venue_address}` : ""}
-            </p>
-          )
-        )}
-
-        {event.description && (
-          <p className="mt-3 whitespace-pre-wrap text-sm text-gray-300">
-            {event.description}
+        <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
+        {event.venue_name && (
+          <p className="mt-1 text-gray-300">
+            📍 {event.venue_name}
+            {event.venue_address ? ` · ${event.venue_address}` : ""}
           </p>
         )}
         <p className="mt-2 text-xs text-gray-500">
-          {goingCount} going
-          {event.capacity != null ? ` / ${event.capacity}` : ""} · {checkedInCount}{" "}
-          checked in
-          {!isVirtual ? ` · check-in radius ${formatDistance(event.geofence_radius_m)}` : ""}
-          {event.requires_approval ? " · approval required" : ""}
-          {event.waitlist_enabled ? " · waitlist on" : ""}
-          {isHost ? " · you host this" : ""}
+          {participants.length} {participants.length === 1 ? "person" : "people"} ·{" "}
+          {arrivedCount} arrived
+          {isHost ? " · you set this destination" : ""}
         </p>
       </header>
 
-      {/* RSVP + check-in panel */}
+      {/* Your participation */}
       <section className="rounded-xl border border-white/10 bg-card p-4">
-        <h2 className="text-sm font-semibold text-gray-300">Your RSVP</h2>
-        <div className="mt-3 flex gap-2">
-          {(["going", "maybe", "declined"] as RsvpStatus[]).map((s) => {
-            const active = myRsvp?.status === s;
-            return (
-              <button
-                key={s}
-                disabled={savingRsvp}
-                onClick={() => saveRsvp({ status: s })}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                  active
-                    ? "bg-accent text-white"
-                    : "border border-white/15 text-gray-300 hover:border-accent/60"
-                }`}
-              >
-                {STATUS_LABEL[s]}
-              </button>
-            );
-          })}
-        </div>
+        <h2 className="text-sm font-semibold text-gray-300">You</h2>
 
-        {myRsvp && myRsvp.status !== "declined" && (
-          <div className="mt-4 space-y-4">
+        {!joined ? (
+          <button
+            disabled={savingRsvp}
+            onClick={() => saveRsvp({})}
+            className="mt-3 w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
+          >
+            {savingRsvp ? "Joining…" : "Join"}
+          </button>
+        ) : (
+          <div className="mt-3 space-y-4">
             <div>
-              <label className="mb-1 block text-sm text-gray-400">
-                Your ETA (optional)
-              </label>
+              <label className="mb-1 block text-sm text-gray-400">Your ETA</label>
               <div className="flex gap-2">
                 <input
                   type="datetime-local"
@@ -386,89 +259,65 @@ export default function EventDetailClient({
               <input
                 type="checkbox"
                 checked={sharing}
-                disabled={savingRsvp || checkedIn}
+                disabled={savingRsvp}
                 onChange={(e) => saveRsvp({ shareLocation: e.target.checked })}
                 className="h-4 w-4 accent-[var(--accent)]"
               />
-              <span>
-                Share my live location while I&apos;m on the way
-                {checkedIn && <span className="text-gray-500"> (stops after check-in)</span>}
-              </span>
+              <span>Share my live location on the way</span>
             </label>
-
-            <div>
-              <button
-                disabled={checkingIn || checkedIn}
-                onClick={handleCheckIn}
-                className="w-full rounded-full bg-going px-4 py-3 font-semibold text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {checkedIn ? "✓ Checked in" : checkingIn ? "Locating…" : "Check in"}
-              </button>
-              {checkinMsg && (
-                <p
-                  className={`mt-2 text-sm ${
-                    checkinOk ? "text-going" : "text-amber-400"
-                  }`}
-                >
-                  {checkinMsg}
-                </p>
-              )}
-            </div>
           </div>
         )}
       </section>
 
-      {/* Live map (in-person events only) */}
-      {!isVirtual && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-gray-300">
-            Live map{" "}
-            <span className="font-normal text-gray-500">
-              · venue + people on the way
-            </span>
-          </h2>
-          <LiveMap venue={venue} radiusM={event.geofence_radius_m} people={people} />
-        </section>
-      )}
-
-      {/* Attendee list */}
+      {/* Live map */}
       <section>
         <h2 className="mb-2 text-sm font-semibold text-gray-300">
-          Guests ({initialAttendees.length})
+          Live map{" "}
+          <span className="font-normal text-gray-500">
+            · destination + everyone on the way
+          </span>
+        </h2>
+        <LiveMap destination={destination} people={people} />
+      </section>
+
+      {/* Participant list */}
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-gray-300">
+          Participants ({participants.length})
         </h2>
         <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-card">
-          {initialAttendees.length === 0 && (
-            <li className="p-4 text-sm text-gray-500">No RSVPs yet.</li>
+          {participants.length === 0 && (
+            <li className="p-4 text-sm text-gray-500">No one has joined yet.</li>
           )}
-          {initialAttendees.map((a) => {
-            const ping = livePings[a.rsvp.user_id];
-            const liveDist = ping
-              ? formatDistance(distanceMeters({ lat: ping.lat, lng: ping.lng }, venue))
+          {participants.map((p) => {
+            const ping = livePings[p.rsvp.user_id];
+            const dist = ping
+              ? distanceMeters({ lat: ping.lat, lng: ping.lng }, destination)
               : null;
-            const enRouteFresh =
+            const arrived = dist != null && dist <= ARRIVAL_RADIUS_M;
+            const fresh =
               ping && now - new Date(ping.created_at).getTime() <= STALE_PING_MS;
             return (
-              <li key={a.rsvp.id} className="flex items-center justify-between gap-3 p-3">
+              <li
+                key={p.rsvp.id}
+                className="flex items-center justify-between gap-3 p-3"
+              >
                 <div className="min-w-0">
                   <div className="truncate font-medium">
-                    {a.name}
-                    {a.rsvp.user_id === currentUserId && (
-                      <span className="text-gray-500"> (you)</span>
-                    )}
+                    {p.rsvp.user_id === currentUserId ? "You" : p.name}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {STATUS_LABEL[a.rsvp.status]}
-                    {a.rsvp.eta && ` · ETA ${formatTime(a.rsvp.eta)}`}
+                    {p.rsvp.eta ? `ETA ${formatTime(p.rsvp.eta)}` : "No ETA set"}
                   </div>
                 </div>
                 <div className="shrink-0 text-right text-xs">
-                  {a.checkin ? (
+                  {arrived ? (
                     <span className="rounded-full bg-going/15 px-2.5 py-1 font-semibold text-going">
-                      ✓ Checked in
+                      ✓ Arrived
                     </span>
-                  ) : enRouteFresh && liveDist ? (
+                  ) : fresh && dist != null ? (
                     <span className="rounded-full bg-accent/15 px-2.5 py-1 font-semibold text-accent-bright">
-                      {liveDist} away
+                      {formatDistance(dist)} away
                     </span>
                   ) : (
                     <span className="text-gray-600">—</span>

@@ -1,8 +1,10 @@
-# Your ETA — RSVP & geofenced check-in
+# Your ETA — shared destinations & live ETAs
 
-A small standalone web app: hosts create events, people RSVP, and RSVP'd guests
-**check in** when they physically arrive (Foursquare-style geofence). Guests can
-optionally **share live GPS** while en route and **set an ETA**. Think Luma + Foursquare.
+A small standalone web app: a host creates a **destination** (a place set via an
+address search) and shares the link. Everyone who opens it can **share their live
+location** and/or **set an ETA**, and the whole group watches each other converge
+on the destination on a **live map + list**, with each person's distance and ETA.
+"Arrived" shows automatically when someone is within ~75 m.
 
 This is a self-contained app and the only thing in this repo. It runs on port 3001.
 
@@ -115,23 +117,26 @@ https://<project-ref>.supabase.co/auth/v1/callback
   `/auth/callback` exchanges the returned code for a session and creates a profile
   row (the same callback handles both flows). Middleware (`middleware.ts`)
   refreshes the session and redirects signed-out users to `/login`.
-- **Host an event** (`/events/new`): fill in details and click the map to drop the
-  venue pin; a slider sets the check-in radius.
-- **Event page** (`/events/[id]`): RSVP (going/maybe/can't go), set an ETA, toggle
-  live-location sharing, and check in.
-- **Geofence is enforced server-side**: `POST /api/checkins` recomputes the
-  Haversine distance from your reported position to the venue and refuses
-  check-ins outside the radius — the client can't fake being there.
-- **Live tracking**: while sharing is on (and you haven't checked in), the browser
-  posts a location ping every 15s. The event page polls everyone's latest ping and
-  shows them on the map and in the guest list with a live distance.
+- **New destination** (`/events/new`): search for a place with the keyless
+  type-ahead (Photon / OpenStreetMap, no API key) and optionally give it a name; a
+  map pin previews the spot.
+- **Destination page** (`/events/[id]`): **Join**, **set an ETA**, and toggle
+  **live-location sharing**. A live map shows the destination plus every
+  participant's latest position, and a list shows each person's name, ETA, live
+  distance, and an **Arrived** badge when they're within ~75 m.
+- **Live tracking**: while sharing is on, the browser posts a location ping every
+  15s. The page polls everyone's latest ping and recomputes the Haversine distance
+  (`lib/geo.ts`) to the destination to drive the map, distances, and arrival state.
+- **Swappable geocoder**: the address type-ahead can be swapped from Photon to
+  Google Places later by replacing the fetch in `components/PlaceAutocomplete.tsx`
+  (and adding the Google endpoint to `connect-src` in `next.config.ts`).
 
 ## Notes on testing GPS locally
 
 - The Geolocation API requires a secure context — `localhost` works; a plain-HTTP
   LAN IP (e.g. `http://192.168.x.x`) will not return coordinates.
-- To test the geofence without physically moving, use Chrome DevTools →
-  **More tools → Sensors → Location** to spoof a coordinate inside/outside the
-  radius.
+- To test arrival without physically moving, use Chrome DevTools →
+  **More tools → Sensors → Location** to spoof a coordinate near (within ~75 m of)
+  or far from the destination.
 - Use two browser profiles (or an incognito window) with two different emails to
-  play host and guest simultaneously.
+  play host and participant simultaneously.

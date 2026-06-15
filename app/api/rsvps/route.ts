@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
       {
         event_id: r.eventId,
         user_id: user.id,
-        status: r.status,
+        // Anyone who joins a destination is simply a participant.
+        status: "going",
         eta: r.eta ?? null,
         share_location: r.shareLocation,
         updated_at: new Date().toISOString(),

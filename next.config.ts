@@ -17,7 +17,7 @@ const securityHeaders = [
       // OpenStreetMap raster tiles are served over https; data: covers leaflet markers
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.tile.openstreetmap.org",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.tile.openstreetmap.org https://photon.komoot.io",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
