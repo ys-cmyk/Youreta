@@ -1,6 +1,9 @@
 # dependencies
 /node_modules
 
+# claude code worktree scratch
+.claude/worktrees/
+
 # next.js
 /.next/
 /out/
