@@ -50,6 +50,9 @@ export default function NewDestinationPage() {
       return;
     }
     router.push(`/events/${json.id}`);
+    // Drop any cached (pre-creation) copy of the destinations list so the new
+    // one reliably shows when the user navigates back to it.
+    router.refresh();
   }
 
   return (

@@ -64,6 +64,49 @@ export default function EventDetailClient({
   const [etaInput, setEtaInput] = useState(toLocalInput(initialMyRsvp?.eta ?? null));
   const [savingRsvp, setSavingRsvp] = useState(false);
 
+  // --- Invite / share -----------------------------------------------------
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function destinationUrl() {
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}/events/${event.id}`;
+  }
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(destinationUrl());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard may be blocked; the link stays visible to copy manually
+    }
+  }
+  function emailInvite() {
+    const url = destinationUrl();
+    const subject = encodeURIComponent(`Share your ETA to ${event.title}`);
+    const body = encodeURIComponent(
+      `I'm headed to ${event.title}. Open this link to share your ETA and ` +
+        `track each other on the way:\n\n${url}`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+  async function shareSheet() {
+    const url = destinationUrl();
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: event.title,
+          text: `Share your ETA to ${event.title}`,
+          url,
+        });
+        return;
+      } catch {
+        // user dismissed the share sheet
+      }
+    }
+    copyLink();
+  }
+
   // Live pings keyed by user_id (current position of everyone converging).
   const [livePings, setLivePings] = useState<Record<string, LocationPing>>(() => {
     const seed: Record<string, LocationPing> = {};
@@ -206,19 +249,70 @@ export default function EventDetailClient({
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
-        {event.venue_name && (
-          <p className="mt-1 text-gray-300">
-            📍 {event.venue_name}
-            {event.venue_address ? ` · ${event.venue_address}` : ""}
-          </p>
-        )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
+            {event.venue_name && (
+              <p className="mt-1 text-gray-300">
+                📍 {event.venue_name}
+                {event.venue_address ? ` · ${event.venue_address}` : ""}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setShareOpen((v) => !v)}
+            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+          >
+            Share your ETA
+          </button>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
           {participants.length} {participants.length === 1 ? "person" : "people"} ·{" "}
           {arrivedCount} arrived
           {isHost ? " · you set this destination" : ""}
         </p>
       </header>
+
+      {/* Invite / share */}
+      {shareOpen && (
+        <section className="rounded-xl border border-accent/30 bg-card p-4">
+          <h2 className="text-sm font-semibold text-gray-200">
+            Invite people to share their ETA
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Anyone with this link can join and see everyone&apos;s live location
+            and ETA.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              readOnly
+              value={destinationUrl()}
+              onFocus={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-gray-300"
+            />
+            <button
+              onClick={copyLink}
+              className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={emailInvite}
+              className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
+            >
+              Email invite
+            </button>
+            <button
+              onClick={shareSheet}
+              className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
+            >
+              Share…
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Your participation */}
       <section className="rounded-xl border border-white/10 bg-card p-4">
@@ -227,10 +321,10 @@ export default function EventDetailClient({
         {!joined ? (
           <button
             disabled={savingRsvp}
-            onClick={() => saveRsvp({})}
+            onClick={() => saveRsvp({ shareLocation: true })}
             className="mt-3 w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
           >
-            {savingRsvp ? "Joining…" : "Join"}
+            {savingRsvp ? "Joining…" : "Join & share my ETA"}
           </button>
         ) : (
           <div className="mt-3 space-y-4">
@@ -255,16 +349,22 @@ export default function EventDetailClient({
               </div>
             </div>
 
-            <label className="flex items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                checked={sharing}
-                disabled={savingRsvp}
-                onChange={(e) => saveRsvp({ shareLocation: e.target.checked })}
-                className="h-4 w-4 accent-[var(--accent)]"
-              />
-              <span>Share my live location on the way</span>
-            </label>
+            <div>
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={sharing}
+                  disabled={savingRsvp}
+                  onChange={(e) => saveRsvp({ shareLocation: e.target.checked })}
+                  className="h-4 w-4 accent-[var(--accent)]"
+                />
+                <span>Share my live location on the way</span>
+              </label>
+              <p className="mt-1 pl-7 text-xs text-gray-500">
+                On by default. Everyone with this destination&apos;s link can see
+                your live location until you turn this off.
+              </p>
+            </div>
           </div>
         )}
       </section>

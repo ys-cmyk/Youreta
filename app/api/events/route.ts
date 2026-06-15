@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createEventSchema } from "@/lib/validation";
 
@@ -43,5 +44,7 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // Make sure the destinations list reflects the new row on next navigation.
+  revalidatePath("/events");
   return NextResponse.json({ id: data.id }, { status: 201 });
 }

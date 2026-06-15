@@ -6,7 +6,13 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/events";
+  // Only allow internal redirects: a single leading slash, never "//host" or a
+  // full URL, so a crafted ?next= can't bounce the user to another site.
+  const rawNext = searchParams.get("next");
+  const next =
+    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : "/events";
 
   if (!code) {
     return NextResponse.redirect(`${origin}/auth/auth-code-error`);
