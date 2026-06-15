@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { OAUTH_ENABLED } from "@/lib/supabase/env";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -87,6 +88,8 @@ function LoginForm() {
             <p className="text-sm text-red-400">{message}</p>
           )}
 
+          {OAUTH_ENABLED && (
+          <>
           <div className="flex items-center gap-3 pt-2">
             <span className="h-px flex-1 bg-white/15" />
             <span className="text-xs uppercase tracking-wide text-gray-500">
@@ -138,6 +141,8 @@ function LoginForm() {
             </svg>
             Continue with Apple
           </button>
+          </>
+          )}
         </form>
       )}
     </div>

@@ -26,3 +26,8 @@ export const SUPABASE_ANON_KEY = (
 export function isSupabaseConfigured(): boolean {
   return /^https?:\/\/.+/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 0;
 }
+
+// Social sign-in (Google/Apple) stays hidden until the providers are actually
+// configured in the Supabase dashboard. Set NEXT_PUBLIC_ENABLE_OAUTH="true" to
+// reveal the buttons once credentials are in place.
+export const OAUTH_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OAUTH === "true";
