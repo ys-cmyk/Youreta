@@ -147,3 +147,38 @@ create policy ec_pings_read on public.ec_location_pings
     or exists (select 1 from public.ec_rsvps r
                where r.event_id = ec_location_pings.event_id and r.user_id = auth.uid())
   );
+
+-- ============================================================================
+-- Luma field parity — additive columns on public.ec_events
+-- (mirror of supabase/migrations/20260615012000_luma_parity.sql)
+-- All columns are nullable or safely-defaulted; nothing existing is changed.
+-- ============================================================================
+alter table public.ec_events add column if not exists cover_image_url text;
+
+alter table public.ec_events add column if not exists location_type text
+  not null default 'in_person'
+  check (location_type in ('in_person', 'virtual'));
+alter table public.ec_events add column if not exists virtual_url text;
+
+alter table public.ec_events add column if not exists timezone text;
+
+alter table public.ec_events add column if not exists capacity integer
+  check (capacity is null or capacity > 0);
+alter table public.ec_events add column if not exists waitlist_enabled boolean
+  not null default false;
+
+alter table public.ec_events add column if not exists requires_approval boolean
+  not null default false;
+
+alter table public.ec_events add column if not exists visibility text
+  not null default 'public'
+  check (visibility in ('public', 'unlisted', 'private'));
+
+alter table public.ec_events add column if not exists is_paid boolean
+  not null default false;
+alter table public.ec_events add column if not exists price_cents integer
+  check (price_cents is null or price_cents >= 0);
+alter table public.ec_events add column if not exists currency text
+  check (currency is null or char_length(currency) = 3);
+
+alter table public.ec_events add column if not exists category text;

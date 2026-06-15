@@ -34,6 +34,19 @@ export async function POST(request: NextRequest) {
       geofence_radius_m: e.geofenceRadiusM,
       starts_at: e.startsAt,
       ends_at: e.endsAt ?? null,
+      // --- Luma parity fields ---
+      cover_image_url: e.coverImageUrl ?? null,
+      location_type: e.locationType ?? "in_person",
+      virtual_url: e.locationType === "virtual" ? e.virtualUrl ?? null : null,
+      timezone: e.timezone ?? null,
+      capacity: e.capacity ?? null,
+      waitlist_enabled: e.waitlistEnabled ?? false,
+      requires_approval: e.requiresApproval ?? false,
+      visibility: e.visibility ?? "public",
+      is_paid: e.isPaid ?? false,
+      price_cents: e.isPaid ? e.priceCents ?? null : null,
+      currency: e.isPaid ? e.currency ?? null : null,
+      category: e.category ?? null,
     })
     .select("id")
     .single();
