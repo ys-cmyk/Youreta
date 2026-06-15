@@ -60,11 +60,61 @@ This is a self-contained app and the only thing in this repo. It runs on port 30
    ```
    Open http://localhost:3001.
 
+## Social sign-in setup (Google & Apple)
+
+The login page offers **Continue with Google** and **Continue with Apple**
+alongside the email magic link (Supabase OAuth, PKCE flow). They reuse the same
+`/auth/callback` route as magic links, so no extra app code is needed — you only
+need to create credentials with each provider and paste them into Supabase.
+
+Both require **your own** Google Cloud and Apple Developer accounts.
+`supabase/config.toml` already enables `[auth.external.google]` and
+`[auth.external.apple]` and references the secrets via `env(...)` — no secrets
+live in this repo. The Supabase callback URL both providers must trust is:
+
+```
+https://<project-ref>.supabase.co/auth/v1/callback
+```
+
+(`<project-ref>` is the subdomain of your `NEXT_PUBLIC_SUPABASE_URL`.)
+
+### Google
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/) →
+   **APIs & Services → Credentials**, create an **OAuth client ID** of type
+   **Web application**.
+2. Under **Authorized redirect URIs**, add
+   `https://<project-ref>.supabase.co/auth/v1/callback`.
+3. Copy the generated **Client ID** and **Client Secret**.
+4. In the Supabase dashboard → **Authentication → Providers → Google**, enable
+   the provider and paste the Client ID and Client Secret, then save.
+
+### Apple
+
+1. In the [Apple Developer](https://developer.apple.com/account/) portal:
+   - Create an **App ID** with **Sign in with Apple** enabled.
+   - Create a **Services ID** (this becomes your `client_id`) and enable
+     **Sign in with Apple** on it. Under its configuration, set the
+     **Return URL** to `https://<project-ref>.supabase.co/auth/v1/callback`.
+   - Create a **Sign in with Apple key** (.p8) and note its **Key ID** and your
+     **Team ID**.
+2. Supabase needs the Services ID plus a **client secret JWT** generated from the
+   .p8 key, Key ID, and Team ID (Supabase's Apple provider page explains the
+   exact values it wants).
+3. In the Supabase dashboard → **Authentication → Providers → Apple**, enable the
+   provider, enter the Services ID and the generated secret, then save.
+
+> For local CLI development, set the corresponding env vars referenced in
+> `config.toml` (e.g. `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`,
+> `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET`, `SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID`,
+> `SUPABASE_AUTH_EXTERNAL_APPLE_SECRET`) before `npx supabase start`.
+
 ## How it works
 
-- **Auth**: `/login` sends a magic link; `/auth/callback` exchanges the code for a
-  session and creates a profile row. Middleware (`middleware.ts`) refreshes the
-  session and redirects signed-out users to `/login`.
+- **Auth**: `/login` sends a magic link or starts a Google/Apple OAuth flow;
+  `/auth/callback` exchanges the returned code for a session and creates a profile
+  row (the same callback handles both flows). Middleware (`middleware.ts`)
+  refreshes the session and redirects signed-out users to `/login`.
 - **Host an event** (`/events/new`): fill in details and click the map to drop the
   venue pin; a slider sets the check-in radius.
 - **Event page** (`/events/[id]`): RSVP (going/maybe/can't go), set an ETA, toggle
