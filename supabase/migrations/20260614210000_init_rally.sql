@@ -1,5 +1,5 @@
 -- ============================================================================
--- Event Check-in app schema  ("Rally")
+-- Event Check-in app schema  ("Your ETA")
 -- All tables are prefixed `ec_` so they never collide with the existing
 -- agent-protocol tables (agents / protocol_logs / replies / ...).
 -- Run this in the Supabase SQL editor against the same project.

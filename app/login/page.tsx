@@ -35,7 +35,7 @@ function LoginForm() {
 
   return (
     <div className="mx-auto max-w-sm py-12">
-      <h1 className="text-3xl font-bold tracking-tight">Welcome to Rally</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Welcome to Your ETA</h1>
       <p className="mt-2 text-sm text-gray-400">
         RSVP to events and check in when you arrive. Sign in with a magic link —
         no password.

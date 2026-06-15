@@ -1,4 +1,4 @@
-export const metadata = { title: "Setup needed — Rally" };
+export const metadata = { title: "Setup needed — Your ETA" };
 
 export default function ConfigErrorPage() {
   return (

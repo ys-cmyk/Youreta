@@ -1,4 +1,4 @@
-# Rally — RSVP & geofenced check-in
+# Your ETA — RSVP & geofenced check-in
 
 A small standalone web app: hosts create events, people RSVP, and RSVP'd guests
 **check in** when they physically arrive (Foursquare-style geofence). Guests can

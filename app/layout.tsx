@@ -3,7 +3,7 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 
 export const metadata: Metadata = {
-  title: "Rally — RSVP & Check In",
+  title: "Your ETA — RSVP & Check In",
   description: "Host events, RSVP, and check in when you arrive.",
 };
 

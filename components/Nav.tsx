@@ -23,7 +23,7 @@ export async function Nav() {
     <header className="sticky top-0 z-[1000] border-b border-white/10 bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
         <Link href="/events" className="flex items-center gap-2 font-bold tracking-tight">
-          <span className="text-accent-bright">◎</span> Rally
+          <span className="text-accent-bright">◎</span> Your ETA
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           {user ? (
