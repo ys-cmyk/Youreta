@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { EventRow, LocationPing, Participant, Rsvp } from "@/lib/types";
 import { distanceMeters, formatDistance } from "@/lib/geo";
@@ -259,12 +260,22 @@ export default function EventDetailClient({
               </p>
             )}
           </div>
-          <button
-            onClick={() => setShareOpen((v) => !v)}
-            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
-          >
-            Share your ETA
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <button
+              onClick={() => setShareOpen((v) => !v)}
+              className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+            >
+              Share your ETA
+            </button>
+            {isHost && (
+              <Link
+                href={`/events/${event.id}/edit`}
+                className="text-xs text-gray-400 hover:text-white"
+              >
+                Edit destination
+              </Link>
+            )}
+          </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">
           {participants.length} {participants.length === 1 ? "person" : "people"} ·{" "}
