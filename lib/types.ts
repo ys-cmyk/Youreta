@@ -1,5 +1,8 @@
 export type RsvpStatus = "going" | "maybe" | "declined";
 
+export type LocationType = "in_person" | "virtual";
+export type EventVisibility = "public" | "unlisted" | "private";
+
 export type Profile = {
   id: string;
   email: string | null;
@@ -20,6 +23,19 @@ export type EventRow = {
   starts_at: string;
   ends_at: string | null;
   created_at: string;
+  // --- Luma parity (all additive, nullable / defaulted) ---
+  cover_image_url: string | null;
+  location_type: LocationType;
+  virtual_url: string | null;
+  timezone: string | null;
+  capacity: number | null;
+  waitlist_enabled: boolean;
+  requires_approval: boolean;
+  visibility: EventVisibility;
+  is_paid: boolean;
+  price_cents: number | null;
+  currency: string | null;
+  category: string | null;
 };
 
 export type Rsvp = {

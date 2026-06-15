@@ -15,6 +15,19 @@ export const createEventSchema = z
     geofenceRadiusM: z.number().int().min(MIN_RADIUS_M).max(MAX_RADIUS_M),
     startsAt: z.string().datetime({ offset: true }),
     endsAt: z.string().datetime({ offset: true }).optional().nullable(),
+    // --- Luma parity (all optional; sensible defaults applied server-side) ---
+    coverImageUrl: z.string().trim().url().max(2000).optional().nullable(),
+    locationType: z.enum(["in_person", "virtual"]).optional(),
+    virtualUrl: z.string().trim().url().max(2000).optional().nullable(),
+    timezone: z.string().trim().max(64).optional().nullable(),
+    capacity: z.number().int().positive().max(1_000_000).optional().nullable(),
+    waitlistEnabled: z.boolean().optional(),
+    requiresApproval: z.boolean().optional(),
+    visibility: z.enum(["public", "unlisted", "private"]).optional(),
+    isPaid: z.boolean().optional(),
+    priceCents: z.number().int().nonnegative().max(100_000_000).optional().nullable(),
+    currency: z.string().trim().length(3).toUpperCase().optional().nullable(),
+    category: z.string().trim().max(60).optional().nullable(),
   })
   .strict();
 

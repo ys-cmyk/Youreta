@@ -238,9 +238,28 @@ export default function EventDetailClient({
   const goingCount = initialAttendees.filter((a) => a.rsvp.status === "going").length;
   const checkedInCount = initialAttendees.filter((a) => a.checkin).length;
 
+  const isVirtual = event.location_type === "virtual";
+  const priceLabel =
+    event.is_paid && event.price_cents != null
+      ? `${(event.price_cents / 100).toLocaleString(undefined, {
+          style: "currency",
+          currency: event.currency || "USD",
+        })}`
+      : event.is_paid
+      ? "Paid"
+      : null;
+
   return (
     <div className="space-y-6">
       <header>
+        {event.cover_image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={event.cover_image_url}
+            alt=""
+            className="mb-4 h-48 w-full rounded-xl border border-white/10 object-cover"
+          />
+        )}
         <div className="text-xs uppercase tracking-wide text-accent-bright">
           {new Date(event.starts_at).toLocaleString(undefined, {
             weekday: "long",
@@ -249,22 +268,68 @@ export default function EventDetailClient({
             hour: "numeric",
             minute: "2-digit",
           })}
+          {event.timezone ? ` · ${event.timezone}` : ""}
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">{event.title}</h1>
-        {event.venue_name && (
-          <p className="mt-1 text-gray-300">
-            📍 {event.venue_name}
-            {event.venue_address ? ` · ${event.venue_address}` : ""}
-          </p>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {event.category && (
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-gray-200">
+              {event.category}
+            </span>
+          )}
+          {isVirtual && (
+            <span className="rounded-full bg-accent/15 px-2.5 py-1 text-xs font-semibold text-accent-bright">
+              Virtual
+            </span>
+          )}
+          {event.visibility !== "public" && (
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold capitalize text-gray-200">
+              {event.visibility}
+            </span>
+          )}
+          {priceLabel && (
+            <span className="rounded-full bg-going/15 px-2.5 py-1 text-xs font-semibold text-going">
+              {priceLabel}
+            </span>
+          )}
+        </div>
+
+        {isVirtual ? (
+          event.virtual_url && (
+            <p className="mt-2 text-gray-300">
+              💻{" "}
+              <a
+                href={event.virtual_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent-bright underline underline-offset-2 hover:text-accent"
+              >
+                Join online
+              </a>
+            </p>
+          )
+        ) : (
+          event.venue_name && (
+            <p className="mt-1 text-gray-300">
+              📍 {event.venue_name}
+              {event.venue_address ? ` · ${event.venue_address}` : ""}
+            </p>
+          )
         )}
+
         {event.description && (
           <p className="mt-3 whitespace-pre-wrap text-sm text-gray-300">
             {event.description}
           </p>
         )}
         <p className="mt-2 text-xs text-gray-500">
-          {goingCount} going · {checkedInCount} checked in · check-in radius{" "}
-          {formatDistance(event.geofence_radius_m)}
+          {goingCount} going
+          {event.capacity != null ? ` / ${event.capacity}` : ""} · {checkedInCount}{" "}
+          checked in
+          {!isVirtual ? ` · check-in radius ${formatDistance(event.geofence_radius_m)}` : ""}
+          {event.requires_approval ? " · approval required" : ""}
+          {event.waitlist_enabled ? " · waitlist on" : ""}
           {isHost ? " · you host this" : ""}
         </p>
       </header>
@@ -353,16 +418,18 @@ export default function EventDetailClient({
         )}
       </section>
 
-      {/* Live map */}
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-gray-300">
-          Live map{" "}
-          <span className="font-normal text-gray-500">
-            · venue + people on the way
-          </span>
-        </h2>
-        <LiveMap venue={venue} radiusM={event.geofence_radius_m} people={people} />
-      </section>
+      {/* Live map (in-person events only) */}
+      {!isVirtual && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-gray-300">
+            Live map{" "}
+            <span className="font-normal text-gray-500">
+              · venue + people on the way
+            </span>
+          </h2>
+          <LiveMap venue={venue} radiusM={event.geofence_radius_m} people={people} />
+        </section>
+      )}
 
       {/* Attendee list */}
       <section>
