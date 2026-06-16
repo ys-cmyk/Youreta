@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { EventRow, LocationPing, Participant, Rsvp } from "@/lib/types";
@@ -179,6 +179,17 @@ export default function EventDetailClient({
     },
     [event.id, myRsvp, currentUserId]
   );
+
+  // Opening an invite link makes you a participant automatically, so the
+  // destination is shared to your account (it shows in your Destinations list)
+  // and your ETA can be tracked. Location sharing defaults on, gated by the
+  // browser's location permission; turn it off with the toggle below.
+  const autoJoinAttempted = useRef(false);
+  useEffect(() => {
+    if (joined || savingRsvp || autoJoinAttempted.current) return;
+    autoJoinAttempted.current = true;
+    saveRsvp({ shareLocation: true });
+  }, [joined, savingRsvp, saveRsvp]);
 
   // --- Broadcast my location while sharing -------------------------------
   useEffect(() => {

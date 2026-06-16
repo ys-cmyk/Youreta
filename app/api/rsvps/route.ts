@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { rsvpSchema } from "@/lib/validation";
 
@@ -41,5 +42,7 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // Joining shares the destination to this user, so refresh their list.
+  revalidatePath("/events");
   return NextResponse.json({ rsvp: data }, { status: 200 });
 }
