@@ -29,12 +29,29 @@ function getPosition(): Promise<GeolocationPosition> {
   });
 }
 
-// ISO -> value for a <input type="datetime-local"> in the user's local zone.
-function toLocalInput(iso: string | null): string {
+// ISO -> "HH:MM" for an <input type="time"> in the user's local zone.
+function toTimeInput(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
+// "HH:MM" (today, local) -> ISO. If that time already passed, assume tomorrow.
+function isoFromTime(hhmm: string): string | null {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  if (d.getTime() < Date.now() - 60_000) d.setDate(d.getDate() + 1);
+  return d.toISOString();
+}
+
+// Minutes from now -> ISO.
+function isoFromMinutes(mins: number): string {
+  return new Date(Date.now() + mins * 60_000).toISOString();
 }
 
 function formatTime(iso: string | null): string {
@@ -62,43 +79,40 @@ export default function EventDetailClient({
 
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [myRsvp, setMyRsvp] = useState<Rsvp | null>(initialMyRsvp);
-  const [etaInput, setEtaInput] = useState(toLocalInput(initialMyRsvp?.eta ?? null));
+  const [etaInput, setEtaInput] = useState(toTimeInput(initialMyRsvp?.eta ?? null));
   const [savingRsvp, setSavingRsvp] = useState(false);
 
   // --- Invite / share -----------------------------------------------------
-  const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Built on the client so the link + email href are ready for rendering.
+  const [shareUrl, setShareUrl] = useState("");
+  useEffect(() => {
+    setShareUrl(`${window.location.origin}/events/${event.id}`);
+  }, [event.id]);
 
-  function destinationUrl() {
-    if (typeof window === "undefined") return "";
-    return `${window.location.origin}/events/${event.id}`;
-  }
+  const mailtoHref = `mailto:?subject=${encodeURIComponent(
+    `Share your ETA to ${event.title}`
+  )}&body=${encodeURIComponent(
+    `I'm headed to ${event.title}. Open this link to share your ETA and ` +
+      `track each other on the way:\n\n${shareUrl}`
+  )}`;
+
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(destinationUrl());
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // clipboard may be blocked; the link stays visible to copy manually
     }
   }
-  function emailInvite() {
-    const url = destinationUrl();
-    const subject = encodeURIComponent(`Share your ETA to ${event.title}`);
-    const body = encodeURIComponent(
-      `I'm headed to ${event.title}. Open this link to share your ETA and ` +
-        `track each other on the way:\n\n${url}`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  }
   async function shareSheet() {
-    const url = destinationUrl();
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
           title: event.title,
           text: `Share your ETA to ${event.title}`,
-          url,
+          url: shareUrl,
         });
         return;
       } catch {
@@ -137,12 +151,7 @@ export default function EventDetailClient({
   // --- Save participation (join / update eta / toggle sharing) -----------
   const saveRsvp = useCallback(
     async (next: { eta?: string | null; shareLocation?: boolean }) => {
-      const eta =
-        next.eta !== undefined
-          ? next.eta
-          : etaInput
-          ? new Date(etaInput).toISOString()
-          : null;
+      const eta = next.eta !== undefined ? next.eta : myRsvp?.eta ?? null;
       const shareLocation = next.shareLocation ?? myRsvp?.share_location ?? false;
 
       setSavingRsvp(true);
@@ -168,7 +177,7 @@ export default function EventDetailClient({
         });
       }
     },
-    [event.id, etaInput, myRsvp, currentUserId]
+    [event.id, myRsvp, currentUserId]
   );
 
   // --- Broadcast my location while sharing -------------------------------
@@ -260,22 +269,14 @@ export default function EventDetailClient({
               </p>
             )}
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <button
-              onClick={() => setShareOpen((v) => !v)}
-              className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+          {isHost && (
+            <Link
+              href={`/events/${event.id}/edit`}
+              className="shrink-0 text-xs text-gray-400 hover:text-white"
             >
-              Share your ETA
-            </button>
-            {isHost && (
-              <Link
-                href={`/events/${event.id}/edit`}
-                className="text-xs text-gray-400 hover:text-white"
-              >
-                Edit destination
-              </Link>
-            )}
-          </div>
+              Edit destination
+            </Link>
+          )}
         </div>
         <p className="mt-2 text-xs text-gray-500">
           {participants.length} {participants.length === 1 ? "person" : "people"} ·{" "}
@@ -284,46 +285,44 @@ export default function EventDetailClient({
         </p>
       </header>
 
-      {/* Invite / share */}
-      {shareOpen && (
-        <section className="rounded-xl border border-accent/30 bg-card p-4">
-          <h2 className="text-sm font-semibold text-gray-200">
-            Invite people to share their ETA
-          </h2>
-          <p className="mt-1 text-xs text-gray-500">
-            Anyone with this link can join and see everyone&apos;s live location
-            and ETA.
-          </p>
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              readOnly
-              value={destinationUrl()}
-              onFocus={(e) => e.currentTarget.select()}
-              className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-gray-300"
-            />
-            <button
-              onClick={copyLink}
-              className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
-            >
-              {copied ? "Copied!" : "Copy link"}
-            </button>
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={emailInvite}
-              className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
-            >
-              Email invite
-            </button>
-            <button
-              onClick={shareSheet}
-              className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
-            >
-              Share…
-            </button>
-          </div>
-        </section>
-      )}
+      {/* Invite / share (always visible) */}
+      <section className="rounded-xl border border-accent/30 bg-card p-4">
+        <h2 className="text-sm font-semibold text-gray-200">
+          Invite people to share their ETA
+        </h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Anyone with this link can join and see everyone&apos;s live location
+          and ETA.
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            readOnly
+            value={shareUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-gray-300"
+          />
+          <button
+            onClick={copyLink}
+            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+        </div>
+        <div className="mt-2 flex gap-2">
+          <a
+            href={mailtoHref}
+            className="flex-1 rounded-full border border-white/15 px-4 py-2 text-center text-sm font-semibold text-gray-200 hover:border-accent/60"
+          >
+            Email invite
+          </a>
+          <button
+            onClick={shareSheet}
+            className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
+          >
+            Share…
+          </button>
+        </div>
+      </section>
 
       {/* Your participation */}
       <section className="rounded-xl border border-white/10 bg-card p-4">
@@ -340,23 +339,64 @@ export default function EventDetailClient({
         ) : (
           <div className="mt-3 space-y-4">
             <div>
-              <label className="mb-1 block text-sm text-gray-400">Your ETA</label>
-              <div className="flex gap-2">
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm text-gray-400">Your ETA</label>
+                {myRsvp?.eta && (
+                  <span className="text-xs font-medium text-accent-bright">
+                    Arriving ~{formatTime(myRsvp.eta)}
+                  </span>
+                )}
+              </div>
+
+              {/* One tap: arrive in N minutes from now */}
+              <div className="flex flex-wrap gap-2">
+                {[5, 10, 15, 30, 60].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={savingRsvp}
+                    onClick={() => {
+                      const iso = isoFromMinutes(m);
+                      setEtaInput(toTimeInput(iso));
+                      saveRsvp({ eta: iso });
+                    }}
+                    className="rounded-full border border-white/15 px-3 py-1.5 text-sm font-medium text-gray-200 hover:border-accent/60 disabled:opacity-50"
+                  >
+                    {m < 60 ? `${m} min` : "1 hr"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Or pick an exact arrival time */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-500">or arrive at</span>
                 <input
-                  type="datetime-local"
+                  type="time"
                   value={etaInput}
                   onChange={(e) => setEtaInput(e.target.value)}
                   className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-accent"
                 />
                 <button
-                  disabled={savingRsvp}
-                  onClick={() =>
-                    saveRsvp({ eta: etaInput ? new Date(etaInput).toISOString() : null })
-                  }
+                  type="button"
+                  disabled={savingRsvp || !etaInput}
+                  onClick={() => saveRsvp({ eta: isoFromTime(etaInput) })}
                   className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60 disabled:opacity-50"
                 >
-                  Save ETA
+                  Set
                 </button>
+                {myRsvp?.eta && (
+                  <button
+                    type="button"
+                    disabled={savingRsvp}
+                    onClick={() => {
+                      setEtaInput("");
+                      saveRsvp({ eta: null });
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-300"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
 
