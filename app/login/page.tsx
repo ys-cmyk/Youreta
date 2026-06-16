@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { OAUTH_ENABLED } from "@/lib/supabase/env";
+import { OAUTH_ENABLED, GOOGLE_ENABLED, APPLE_ENABLED } from "@/lib/supabase/env";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -98,6 +98,7 @@ function LoginForm() {
             <span className="h-px flex-1 bg-white/15" />
           </div>
 
+          {GOOGLE_ENABLED && (
           <button
             type="button"
             onClick={() => handleOAuth("google")}
@@ -124,7 +125,9 @@ function LoginForm() {
             </svg>
             Continue with Google
           </button>
+          )}
 
+          {APPLE_ENABLED && (
           <button
             type="button"
             onClick={() => handleOAuth("apple")}
@@ -141,6 +144,7 @@ function LoginForm() {
             </svg>
             Continue with Apple
           </button>
+          )}
           </>
           )}
         </form>
