@@ -3,8 +3,23 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 
 export const metadata: Metadata = {
-  title: "Your ETA — RSVP & Check In",
-  description: "Host events, RSVP, and check in when you arrive.",
+  metadataBase: new URL("https://youreta.vercel.app"),
+  title: "Your ETA",
+  description:
+    "Set a destination, share your ETA, and track each other on the way.",
+  openGraph: {
+    title: "Your ETA",
+    description:
+      "Set a destination, share your ETA, and track each other on the way.",
+    siteName: "Your ETA",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Your ETA",
+    description:
+      "Set a destination, share your ETA, and track each other on the way.",
+  },
 };
 
 export default function RootLayout({
