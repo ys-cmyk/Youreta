@@ -54,6 +54,15 @@ function isoFromMinutes(mins: number): string {
   return new Date(Date.now() + mins * 60_000).toISOString();
 }
 
+// 1–2 uppercase initials for a participant avatar.
+function avatarInitials(name: string): string {
+  const clean = name.trim();
+  if (!clean) return "?";
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function formatTime(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString(undefined, {
@@ -260,6 +269,7 @@ export default function EventDetailClient({
         arrived,
         distanceLabel: formatDistance(dist),
         etaLabel: etaByUser[p.user_id] ? formatTime(etaByUser[p.user_id]) : null,
+        isMe,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -447,11 +457,13 @@ export default function EventDetailClient({
         <h2 className="mb-2 text-sm font-semibold text-gray-300">
           Participants ({participants.length})
         </h2>
-        <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-card">
+        <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-card">
           {participants.length === 0 && (
             <li className="p-4 text-sm text-gray-500">No one has joined yet.</li>
           )}
           {participants.map((p) => {
+            const isYou = p.rsvp.user_id === currentUserId;
+            const displayName = isYou ? "You" : p.name;
             const ping = livePings[p.rsvp.user_id];
             const dist = ping
               ? distanceMeters({ lat: ping.lat, lng: ping.lng }, destination)
@@ -459,17 +471,28 @@ export default function EventDetailClient({
             const arrived = dist != null && dist <= ARRIVAL_RADIUS_M;
             const fresh =
               ping && now - new Date(ping.created_at).getTime() <= STALE_PING_MS;
+            const avatarColor = arrived
+              ? "var(--going)"
+              : fresh
+              ? "var(--accent)"
+              : "var(--declined)";
             return (
               <li
                 key={p.rsvp.id}
-                className="flex items-center justify-between gap-3 p-3"
+                className="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-white/[0.03]"
               >
-                <div className="min-w-0">
-                  <div className="truncate font-medium">
-                    {p.rsvp.user_id === currentUserId ? "You" : p.name}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {p.rsvp.eta ? `ETA ${formatTime(p.rsvp.eta)}` : "No ETA set"}
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                    style={{ background: avatarColor }}
+                  >
+                    {avatarInitials(displayName)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{displayName}</div>
+                    <div className="text-xs text-gray-500">
+                      {p.rsvp.eta ? `ETA ${formatTime(p.rsvp.eta)}` : "No ETA set"}
+                    </div>
                   </div>
                 </div>
                 <div className="shrink-0 text-right text-xs">

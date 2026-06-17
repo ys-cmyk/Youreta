@@ -56,15 +56,26 @@ function LoginForm() {
   }
 
   return (
-    <div className="mx-auto max-w-sm py-12">
-      <h1 className="text-3xl font-bold tracking-tight">Welcome to Your ETA</h1>
-      <p className="mt-2 text-sm text-gray-400">
-        Set a destination, share your ETA, and track each other on the way. Sign
-        in with a magic link — no password.
-      </p>
+    <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center py-12">
+      {/* Subtle brand gradient glow behind the heading. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-12 -z-10 h-56 w-56 -translate-x-1/2 rounded-full bg-accent/20 blur-3xl"
+      />
+
+      <div className="text-center">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-bright to-accent text-2xl text-white shadow-lg shadow-accent/30">
+          ◎
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome to Your ETA</h1>
+        <p className="mx-auto mt-2 max-w-xs text-sm text-gray-400">
+          Set a destination, share your ETA, and track each other on the way.
+          Sign in with a magic link — no password.
+        </p>
+      </div>
 
       {status === "sent" ? (
-        <div className="mt-8 rounded-xl border border-going/40 bg-going/10 p-4 text-sm">
+        <div className="mt-8 rounded-xl border border-going/40 bg-going/10 p-4 text-center text-sm">
           Check <span className="font-semibold">{email}</span> for a sign-in link.
         </div>
       ) : (
@@ -75,12 +86,12 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-lg border border-white/15 bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:ring-2 focus:ring-accent"
+            className="w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-gray-500 transition-colors focus:border-transparent focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <button
             type="submit"
             disabled={status === "sending"}
-            className="w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
+            className="w-full rounded-full bg-accent px-4 py-3 font-semibold text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-bright disabled:opacity-50"
           >
             {status === "sending" ? "Sending…" : "Send magic link"}
           </button>

@@ -22,25 +22,31 @@ export async function Nav() {
   return (
     <header className="sticky top-0 z-[1000] border-b border-white/10 bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-        <Link href="/events" className="flex items-center gap-2 font-bold tracking-tight">
+        <Link
+          href="/events"
+          className="flex items-center gap-2 font-bold tracking-tight transition-opacity hover:opacity-80"
+        >
           <span className="text-accent-bright">◎</span> Your ETA
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           {user ? (
             <>
-              <Link href="/events" className="text-gray-300 hover:text-white">
+              <Link
+                href="/events"
+                className="text-gray-300 transition-colors hover:text-white"
+              >
                 Destinations
               </Link>
               <Link
                 href="/events/new"
-                className="rounded-full bg-accent px-3 py-1.5 font-semibold text-white hover:bg-accent-bright"
+                className="rounded-full bg-accent px-3 py-1.5 font-semibold text-white transition-colors hover:bg-accent-bright"
               >
                 New destination
               </Link>
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-400 transition-colors hover:text-white"
                   title={user.email ?? undefined}
                 >
                   Sign out
@@ -48,7 +54,10 @@ export async function Nav() {
               </form>
             </>
           ) : (
-            <Link href="/login" className="text-gray-300 hover:text-white">
+            <Link
+              href="/login"
+              className="text-gray-300 transition-colors hover:text-white"
+            >
               Sign in
             </Link>
           )}

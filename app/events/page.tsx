@@ -56,10 +56,19 @@ export default async function DestinationsPage() {
       </div>
 
       {destinations.length === 0 ? (
-        <div className="mt-10 rounded-xl border border-white/10 bg-card p-8 text-center text-sm text-gray-400">
-          No destinations yet.{" "}
-          <Link href="/events/new" className="text-accent-bright hover:underline">
-            Create one →
+        <div className="mt-10 rounded-2xl border border-white/10 bg-card p-10 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-2xl">
+            📍
+          </div>
+          <p className="text-sm font-medium text-gray-200">No destinations yet</p>
+          <p className="mx-auto mt-1 max-w-xs text-sm text-gray-500">
+            Create a destination, share the link, and track each other on the way.
+          </p>
+          <Link
+            href="/events/new"
+            className="mt-5 inline-block rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-bright"
+          >
+            Create your first destination
           </Link>
         </div>
       ) : (
@@ -68,14 +77,19 @@ export default async function DestinationsPage() {
             <li key={e.id}>
               <Link
                 href={`/events/${e.id}`}
-                className="block rounded-xl border border-white/10 bg-card p-4 transition-colors hover:border-accent/60"
+                className="group flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-card p-4 transition-all hover:border-accent/60 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-black/20"
               >
-                <div className="text-lg font-semibold">{e.title}</div>
-                {e.venue_address && (
-                  <div className="mt-0.5 text-sm text-gray-400">
-                    📍 {e.venue_address}
-                  </div>
-                )}
+                <div className="min-w-0">
+                  <div className="truncate text-lg font-semibold">{e.title}</div>
+                  {e.venue_address && (
+                    <div className="mt-0.5 truncate text-sm text-gray-400">
+                      📍 {e.venue_address}
+                    </div>
+                  )}
+                </div>
+                <span className="shrink-0 text-gray-600 transition-all group-hover:translate-x-0.5 group-hover:text-accent-bright">
+                  →
+                </span>
               </Link>
             </li>
           ))}

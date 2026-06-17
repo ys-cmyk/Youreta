@@ -6,8 +6,9 @@ import "./leaflet-setup";
 
 type LatLng = { lat: number; lng: number };
 
-const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const OSM_ATTR = "&copy; OpenStreetMap contributors";
+const CARTO_URL =
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const CARTO_ATTR = "&copy; OpenStreetMap contributors &copy; CARTO";
 
 // Keep the map centered on the currently-selected place (e.g. after an address
 // is chosen from the type-ahead).
@@ -30,7 +31,7 @@ export default function MapPicker({ value }: { value: LatLng | null }) {
         scrollWheelZoom
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer url={OSM_URL} attribution={OSM_ATTR} />
+        <TileLayer url={CARTO_URL} attribution={CARTO_ATTR} subdomains="abcd" />
         <Recenter value={value} />
         {value && <Marker position={[value.lat, value.lng]} />}
       </MapContainer>

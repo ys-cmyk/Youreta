@@ -1,10 +1,23 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, CircleMarker, Popup } from "react-leaflet";
+import { useMemo } from "react";
+import L from "leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Polyline,
+  Popup,
+} from "react-leaflet";
 import "./leaflet-setup";
 
-const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const OSM_ATTR = "&copy; OpenStreetMap contributors";
+const CARTO_URL =
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const CARTO_ATTR = "&copy; OpenStreetMap contributors &copy; CARTO";
+
+const ACCENT = "#6366f1";
+const GOING = "#10b981";
+const STALE = "#6b7280";
 
 export type LivePerson = {
   id: string;
@@ -15,7 +28,32 @@ export type LivePerson = {
   arrived: boolean;
   distanceLabel: string;
   etaLabel: string | null;
+  isMe?: boolean;
 };
+
+// 1–2 uppercase initials derived from a person's name (ignoring a trailing
+// "(you)" suffix added upstream).
+function initials(name: string): string {
+  const clean = name.replace(/\s*\(you\)\s*$/i, "").trim();
+  if (!clean) return "?";
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function personColor(p: LivePerson): string {
+  if (p.arrived) return GOING;
+  if (p.stale) return STALE;
+  return ACCENT;
+}
+
+const destIcon = L.divIcon({
+  className: "yeta-dest",
+  html: '<div class="yeta-dest-inner"><span>📍</span></div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 28],
+  popupAnchor: [0, -28],
+});
 
 export default function LiveMap({
   destination,
@@ -24,6 +62,35 @@ export default function LiveMap({
   destination: { lat: number; lng: number };
   people: LivePerson[];
 }) {
+  const personIcons = useMemo(() => {
+    const map = new Map<string, L.DivIcon>();
+    for (const p of people) {
+      const color = personColor(p);
+      // Pulse only for people actively sharing (fresh, not stale, not arrived).
+      const live = !p.stale && !p.arrived;
+      const classes = [
+        "yeta-avatar",
+        live ? "yeta-avatar-live" : "",
+        p.isMe ? "yeta-avatar-me" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      map.set(
+        p.id,
+        L.divIcon({
+          className: classes,
+          html: `<div class="yeta-avatar-inner" style="background:${color};color:${color}"><span style="color:#fff">${initials(
+            p.name
+          )}</span></div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -18],
+        })
+      );
+    }
+    return map;
+  }, [people]);
+
   return (
     <div className="h-80 overflow-hidden rounded-xl border border-white/10">
       <MapContainer
@@ -32,29 +99,50 @@ export default function LiveMap({
         scrollWheelZoom
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer url={OSM_URL} attribution={OSM_ATTR} />
-        <Marker position={[destination.lat, destination.lng]}>
+        <TileLayer
+          url={CARTO_URL}
+          attribution={CARTO_ATTR}
+          subdomains="abcd"
+        />
+
+        {/* Connecting lines from each person to the destination. */}
+        {people.map((p) =>
+          p.arrived ? null : (
+            <Polyline
+              key={`line-${p.id}`}
+              positions={[
+                [p.lat, p.lng],
+                [destination.lat, destination.lng],
+              ]}
+              pathOptions={{
+                color: personColor(p),
+                weight: 2,
+                opacity: 0.35,
+                dashArray: "4 6",
+              }}
+            />
+          )
+        )}
+
+        <Marker position={[destination.lat, destination.lng]} icon={destIcon}>
           <Popup>Destination</Popup>
         </Marker>
-        {people.map((p) => {
-          const color = p.arrived ? "#10b981" : p.stale ? "#6b7280" : "#6366f1";
-          return (
-            <CircleMarker
-              key={p.id}
-              center={[p.lat, p.lng]}
-              radius={8}
-              pathOptions={{ color, fillColor: color, fillOpacity: 0.9 }}
-            >
-              <Popup>
-                <strong>{p.name}</strong>
-                <br />
-                {p.arrived ? "Arrived" : `${p.distanceLabel} away`}
-                {p.etaLabel ? ` · ETA ${p.etaLabel}` : ""}
-                {p.stale && !p.arrived ? " · stale" : ""}
-              </Popup>
-            </CircleMarker>
-          );
-        })}
+
+        {people.map((p) => (
+          <Marker
+            key={p.id}
+            position={[p.lat, p.lng]}
+            icon={personIcons.get(p.id)}
+          >
+            <Popup>
+              <strong>{p.name}</strong>
+              <br />
+              {p.arrived ? "Arrived" : `${p.distanceLabel} away`}
+              {p.etaLabel ? ` · ETA ${p.etaLabel}` : ""}
+              {p.stale && !p.arrived ? " · stale" : ""}
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
     </div>
   );

@@ -20,6 +20,9 @@
   --color-card: var(--card-bg);
   --color-accent: var(--accent);
   --color-accent-bright: var(--accent-bright);
+  --color-going: var(--going);
+  --color-maybe: var(--maybe);
+  --color-declined: var(--declined);
   --font-sans: var(--font-stack);
 }
 
@@ -35,13 +38,104 @@ body {
   font-family: inherit;
 }
 
+/* --- Dark-themed Leaflet popups -------------------------------------------- */
+.leaflet-popup-content-wrapper {
+  background: var(--card-bg);
+  color: var(--foreground);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.leaflet-popup-content {
+  margin: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.leaflet-popup-content strong {
+  color: var(--foreground);
+}
+.leaflet-popup-tip {
+  background: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+.leaflet-popup-close-button {
+  color: rgba(230, 236, 255, 0.6) !important;
+}
+.leaflet-popup-close-button:hover {
+  color: var(--foreground) !important;
+}
+.leaflet-container a.leaflet-popup-close-button {
+  padding: 6px 8px 0 0;
+}
+
+/* --- Live person avatar markers -------------------------------------------- */
+.yeta-avatar {
+  background: transparent;
+  border: none;
+}
+.yeta-avatar-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.yeta-avatar-me .yeta-avatar-inner {
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45), 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+/* Soft pulsing "live" ring around actively-sharing people. */
+.yeta-avatar-live .yeta-avatar-inner::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.55;
+  z-index: -1;
+  animation: ec-ping 1.8s ease-out infinite;
+}
+
+/* --- Destination pin ------------------------------------------------------- */
+.yeta-dest {
+  background: transparent;
+  border: none;
+}
+.yeta-dest-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px 9999px 9999px 2px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+.yeta-dest-inner span {
+  transform: rotate(-45deg);
+  font-size: 14px;
+  line-height: 1;
+}
+
 @keyframes ec-ping {
   0% {
-    transform: scale(0.6);
-    opacity: 0.8;
+    transform: scale(0.85);
+    opacity: 0.6;
   }
   100% {
-    transform: scale(2.4);
+    transform: scale(2.2);
     opacity: 0;
   }
 }
