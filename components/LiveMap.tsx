@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import L from "leaflet";
 import {
   MapContainer,
@@ -8,6 +8,7 @@ import {
   Marker,
   Polyline,
   Popup,
+  useMap,
 } from "react-leaflet";
 import "./leaflet-setup";
 
@@ -55,6 +56,41 @@ const destIcon = L.divIcon({
   popupAnchor: [0, -28],
 });
 
+// Keep the destination and everyone converging in view. Refit only when the set
+// of people changes (someone joins/leaves) — not on every position tick — so the
+// map doesn't constantly jitter as people move closer.
+function FitBounds({
+  destination,
+  people,
+}: {
+  destination: { lat: number; lng: number };
+  people: LivePerson[];
+}) {
+  const map = useMap();
+  const idsKey = useMemo(
+    () => people.map((p) => p.id).sort().join(","),
+    [people]
+  );
+  useEffect(() => {
+    const points: [number, number][] = [
+      [destination.lat, destination.lng],
+      ...people.map((p) => [p.lat, p.lng] as [number, number]),
+    ];
+    if (points.length === 1) {
+      map.setView(points[0], 15, { animate: true });
+    } else {
+      map.fitBounds(L.latLngBounds(points), {
+        padding: [56, 56],
+        maxZoom: 16,
+        animate: true,
+      });
+    }
+    // Refit on membership change only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+  return null;
+}
+
 export default function LiveMap({
   destination,
   people,
@@ -92,7 +128,7 @@ export default function LiveMap({
   }, [people]);
 
   return (
-    <div className="h-80 overflow-hidden rounded-xl border border-white/10">
+    <div className="h-[26rem] overflow-hidden rounded-2xl border border-white/10 shadow-lg shadow-black/30">
       <MapContainer
         center={[destination.lat, destination.lng]}
         zoom={14}
@@ -104,6 +140,7 @@ export default function LiveMap({
           attribution={CARTO_ATTR}
           subdomains="abcd"
         />
+        <FitBounds destination={destination} people={people} />
 
         {/* Connecting lines from each person to the destination. */}
         {people.map((p) =>

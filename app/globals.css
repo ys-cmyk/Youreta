@@ -69,6 +69,15 @@ body {
   padding: 6px 8px 0 0;
 }
 
+/* Glide markers between location updates instead of jumping. Disabled during
+   zoom so the zoom animation stays crisp. */
+.leaflet-marker-icon {
+  transition: transform 0.9s ease-in-out;
+}
+.leaflet-zoom-anim .leaflet-marker-icon {
+  transition: none;
+}
+
 /* --- Live person avatar markers -------------------------------------------- */
 .yeta-avatar {
   background: transparent;
