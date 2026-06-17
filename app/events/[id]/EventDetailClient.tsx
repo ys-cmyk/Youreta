@@ -93,6 +93,12 @@ export default function EventDetailClient({
 
   // --- Invite / share -----------------------------------------------------
   const [copied, setCopied] = useState(false);
+  // Invite is expanded when you're the only one here (so you're nudged to
+  // invite), and collapses to a compact bar once others have joined. The ETA
+  // controls collapse to a one-line summary once you've set a time. Both keep
+  // the map + everyone's ETAs as the focus.
+  const [inviteOpen, setInviteOpen] = useState(initialParticipants.length <= 1);
+  const [etaEditing, setEtaEditing] = useState(false);
   // Built on the client so the link + email href are ready for rendering.
   const [shareUrl, setShareUrl] = useState("");
   useEffect(() => {
@@ -306,138 +312,216 @@ export default function EventDetailClient({
         </p>
       </header>
 
-      {/* Invite / share (always visible) */}
-      <section className="rounded-xl border border-accent/30 bg-card p-4">
-        <h2 className="text-sm font-semibold text-gray-200">
-          Invite people to share their ETA
-        </h2>
-        <p className="mt-1 text-xs text-gray-500">
-          Anyone with this link can join and see everyone&apos;s live location
-          and ETA.
-        </p>
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            readOnly
-            value={shareUrl}
-            onFocus={(e) => e.currentTarget.select()}
-            className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-gray-300"
-          />
-          <button
-            onClick={copyLink}
-            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
-          >
-            {copied ? "Copied!" : "Copy link"}
-          </button>
-        </div>
-        <div className="mt-2 flex gap-2">
-          <a
-            href={mailtoHref}
-            className="flex-1 rounded-full border border-white/15 px-4 py-2 text-center text-sm font-semibold text-gray-200 hover:border-accent/60"
-          >
-            Email invite
-          </a>
-          <button
-            onClick={shareSheet}
-            className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
-          >
-            Share…
-          </button>
-        </div>
-      </section>
-
-      {/* Your participation */}
-      <section className="rounded-xl border border-white/10 bg-card p-4">
-        <h2 className="text-sm font-semibold text-gray-300">You</h2>
-
-        {!joined ? (
-          <button
-            disabled={savingRsvp}
-            onClick={() => saveRsvp({ shareLocation: true })}
-            className="mt-3 w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
-          >
-            {savingRsvp ? "Joining…" : "Join & share my ETA"}
-          </button>
-        ) : (
-          <div className="mt-3 space-y-4">
+      {/* Invite / share */}
+      {inviteOpen ? (
+        <section className="rounded-xl border border-accent/30 bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="text-sm text-gray-400">Your ETA</label>
-                {myRsvp?.eta && (
-                  <span className="text-xs font-medium text-accent-bright">
-                    Arriving ~{formatTime(myRsvp.eta)}
-                  </span>
-                )}
-              </div>
-
-              {/* One tap: arrive in N minutes from now */}
-              <div className="flex flex-wrap gap-2">
-                {[5, 10, 15, 30, 60].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    disabled={savingRsvp}
-                    onClick={() => {
-                      const iso = isoFromMinutes(m);
-                      setEtaInput(toTimeInput(iso));
-                      saveRsvp({ eta: iso });
-                    }}
-                    className="rounded-full border border-white/15 px-3 py-1.5 text-sm font-medium text-gray-200 hover:border-accent/60 disabled:opacity-50"
-                  >
-                    {m < 60 ? `${m} min` : "1 hr"}
-                  </button>
-                ))}
-              </div>
-
-              {/* Or pick an exact arrival time */}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-gray-500">or arrive at</span>
-                <input
-                  type="time"
-                  value={etaInput}
-                  onChange={(e) => setEtaInput(e.target.value)}
-                  className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-accent"
-                />
-                <button
-                  type="button"
-                  disabled={savingRsvp || !etaInput}
-                  onClick={() => saveRsvp({ eta: isoFromTime(etaInput) })}
-                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60 disabled:opacity-50"
-                >
-                  Set
-                </button>
-                {myRsvp?.eta && (
-                  <button
-                    type="button"
-                    disabled={savingRsvp}
-                    onClick={() => {
-                      setEtaInput("");
-                      saveRsvp({ eta: null });
-                    }}
-                    className="text-xs text-gray-500 hover:text-gray-300"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="flex items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={sharing}
-                  disabled={savingRsvp}
-                  onChange={(e) => saveRsvp({ shareLocation: e.target.checked })}
-                  className="h-4 w-4 accent-[var(--accent)]"
-                />
-                <span>Share my live location on the way</span>
-              </label>
-              <p className="mt-1 pl-7 text-xs text-gray-500">
-                On by default. Everyone with this destination&apos;s link can see
-                your live location until you turn this off.
+              <h2 className="text-sm font-semibold text-gray-200">
+                Invite people to share their ETA
+              </h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Anyone with this link can join and see everyone&apos;s live
+                location and ETA.
               </p>
             </div>
+            <button
+              onClick={() => setInviteOpen(false)}
+              className="shrink-0 text-xs text-gray-400 hover:text-white"
+            >
+              Hide
+            </button>
           </div>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              readOnly
+              value={shareUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-gray-300"
+            />
+            <button
+              onClick={copyLink}
+              className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <a
+              href={mailtoHref}
+              className="flex-1 rounded-full border border-white/15 px-4 py-2 text-center text-sm font-semibold text-gray-200 hover:border-accent/60"
+            >
+              Email invite
+            </a>
+            <button
+              onClick={shareSheet}
+              className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60"
+            >
+              Share…
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-card p-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-gray-200">Invite people</div>
+            <div className="truncate text-xs text-gray-500">
+              Share the link so others can share their ETA
+            </div>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={copyLink}
+              className="rounded-full border border-white/15 px-3 py-1.5 text-sm font-semibold text-gray-200 hover:border-accent/60"
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+            <button
+              onClick={() => setInviteOpen(true)}
+              className="rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-bright"
+            >
+              Invite
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Your participation — collapses to a one-line summary once your ETA is
+          set, so the map + everyone's ETAs get the screen. */}
+      <section className="rounded-xl border border-white/10 bg-card p-4">
+        {!joined ? (
+          <>
+            <h2 className="text-sm font-semibold text-gray-300">You</h2>
+            <button
+              disabled={savingRsvp}
+              onClick={() => saveRsvp({ shareLocation: true })}
+              className="mt-3 w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
+            >
+              {savingRsvp ? "Joining…" : "Join & share my ETA"}
+            </button>
+          </>
+        ) : myRsvp?.eta && !etaEditing ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                style={{ background: "var(--accent)" }}
+              >
+                {avatarInitials("You")}
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-medium">You</div>
+                <div className="text-xs text-gray-500">
+                  ETA {formatTime(myRsvp.eta)} ·{" "}
+                  {sharing ? "Sharing location" : "Not sharing"}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setEtaEditing(true)}
+              className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:border-accent/60"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-300">You</h2>
+              {myRsvp?.eta && (
+                <button
+                  onClick={() => setEtaEditing(false)}
+                  className="text-xs text-gray-400 hover:text-white"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+            <div className="mt-3 space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm text-gray-400">Your ETA</label>
+                  {myRsvp?.eta && (
+                    <span className="text-xs font-medium text-accent-bright">
+                      Arriving ~{formatTime(myRsvp.eta)}
+                    </span>
+                  )}
+                </div>
+
+                {/* One tap: arrive in N minutes from now */}
+                <div className="flex flex-wrap gap-2">
+                  {[5, 10, 15, 30, 60].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={savingRsvp}
+                      onClick={() => {
+                        const iso = isoFromMinutes(m);
+                        setEtaInput(toTimeInput(iso));
+                        saveRsvp({ eta: iso });
+                        setEtaEditing(false);
+                      }}
+                      className="rounded-full border border-white/15 px-3 py-1.5 text-sm font-medium text-gray-200 hover:border-accent/60 disabled:opacity-50"
+                    >
+                      {m < 60 ? `${m} min` : "1 hr"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Or pick an exact arrival time */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-gray-500">or arrive at</span>
+                  <input
+                    type="time"
+                    value={etaInput}
+                    onChange={(e) => setEtaInput(e.target.value)}
+                    className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-accent"
+                  />
+                  <button
+                    type="button"
+                    disabled={savingRsvp || !etaInput}
+                    onClick={() => {
+                      saveRsvp({ eta: isoFromTime(etaInput) });
+                      setEtaEditing(false);
+                    }}
+                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 hover:border-accent/60 disabled:opacity-50"
+                  >
+                    Set
+                  </button>
+                  {myRsvp?.eta && (
+                    <button
+                      type="button"
+                      disabled={savingRsvp}
+                      onClick={() => {
+                        setEtaInput("");
+                        saveRsvp({ eta: null });
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-300"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={sharing}
+                    disabled={savingRsvp}
+                    onChange={(e) => saveRsvp({ shareLocation: e.target.checked })}
+                    className="h-4 w-4 accent-[var(--accent)]"
+                  />
+                  <span>Share my live location on the way</span>
+                </label>
+                <p className="mt-1 pl-7 text-xs text-gray-500">
+                  On by default. Everyone with this destination&apos;s link can see
+                  your live location until you turn this off.
+                </p>
+              </div>
+            </div>
+          </>
         )}
       </section>
 
