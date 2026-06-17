@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import {
   MapContainer,
@@ -91,12 +91,33 @@ function FitBounds({
   return null;
 }
 
+// Focus target lifted from the parent. `key` changes on every tap so the same
+// person can be re-focused repeatedly; we fly to the point whenever it changes.
+export type MapFocus = { lat: number; lng: number; key: number };
+
+function FlyToFocus({ focus }: { focus: MapFocus | null }) {
+  const map = useMap();
+  const lastKey = useRef<number | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    if (lastKey.current === focus.key) return;
+    lastKey.current = focus.key;
+    map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 16), {
+      animate: true,
+      duration: 0.8,
+    });
+  }, [focus, map]);
+  return null;
+}
+
 export default function LiveMap({
   destination,
   people,
+  focus = null,
 }: {
   destination: { lat: number; lng: number };
   people: LivePerson[];
+  focus?: MapFocus | null;
 }) {
   const personIcons = useMemo(() => {
     const map = new Map<string, L.DivIcon>();
@@ -127,6 +148,22 @@ export default function LiveMap({
     return map;
   }, [people]);
 
+  // Open a person's popup when they're focused (tapped in the list). We match by
+  // coordinates since the focus target carries lat/lng, not an id.
+  const markerRefs = useRef(new Map<string, L.Marker>());
+  useEffect(() => {
+    if (!focus) return;
+    const hit = people.find(
+      (p) =>
+        Math.abs(p.lat - focus.lat) < 1e-9 && Math.abs(p.lng - focus.lng) < 1e-9
+    );
+    if (!hit) return;
+    const m = markerRefs.current.get(hit.id);
+    // Defer so the flyTo animation can start before the popup opens.
+    const t = setTimeout(() => m?.openPopup(), 850);
+    return () => clearTimeout(t);
+  }, [focus, people]);
+
   return (
     <div className="h-[26rem] overflow-hidden rounded-2xl border border-white/10 shadow-lg shadow-black/30">
       <MapContainer
@@ -141,6 +178,7 @@ export default function LiveMap({
           subdomains="abcd"
         />
         <FitBounds destination={destination} people={people} />
+        <FlyToFocus focus={focus} />
 
         {/* Connecting lines from each person to the destination. */}
         {people.map((p) =>
@@ -170,6 +208,10 @@ export default function LiveMap({
             key={p.id}
             position={[p.lat, p.lng]}
             icon={personIcons.get(p.id)}
+            ref={(m) => {
+              if (m) markerRefs.current.set(p.id, m);
+              else markerRefs.current.delete(p.id);
+            }}
           >
             <Popup>
               <strong>{p.name}</strong>

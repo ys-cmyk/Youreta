@@ -6,7 +6,16 @@ import dynamic from "next/dynamic";
 import type { EventRow, LocationPing, Participant, Rsvp } from "@/lib/types";
 import { distanceMeters, formatDistance } from "@/lib/geo";
 import { ARRIVAL_RADIUS_M, PING_INTERVAL_MS, STALE_PING_MS } from "@/lib/constants";
-import type { LivePerson } from "@/components/LiveMap";
+import type { LivePerson, MapFocus } from "@/components/LiveMap";
+
+// How long location sharing stays on. "arrive" auto-stops once you reach the
+// destination; the timed modes auto-stop after a fixed duration.
+type ShareMode = "arrive" | "15m" | "1h";
+const SHARE_DURATION_MS: Record<Exclude<ShareMode, "arrive">, number> = {
+  "15m": 15 * 60_000,
+  "1h": 60 * 60_000,
+};
+type ShareSetting = { mode: ShareMode; startedAt: number };
 
 const LiveMap = dynamic(() => import("@/components/LiveMap"), {
   ssr: false,
@@ -69,6 +78,17 @@ function formatTime(iso: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+// Compact "time since" label for ping freshness, e.g. "12s", "2m", "1h".
+function formatAgo(ms: number): string {
+  if (ms < 0) ms = 0;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  return `${h}h`;
 }
 
 export default function EventDetailClient({
@@ -162,6 +182,61 @@ export default function EventDetailClient({
 
   const joined = myRsvp !== null;
   const sharing = myRsvp?.share_location ?? false;
+
+  // --- Map focus (tap a person to fly to their marker) -------------------
+  const [focus, setFocus] = useState<MapFocus | null>(null);
+
+  // The "You" controls section, so the mobile sticky bar can scroll to it.
+  const youSectionRef = useRef<HTMLElement | null>(null);
+
+  // --- Share-location duration (client-side only) ------------------------
+  // Persisted per-event in localStorage so a reload continues the countdown.
+  const shareStorageKey = `yeta:share:${event.id}`;
+  const [shareSetting, setShareSetting] = useState<ShareSetting>({
+    mode: "arrive",
+    startedAt: Date.now(),
+  });
+  // Load the stored setting on mount. If sharing is already on but nothing is
+  // stored, treat the start as now.
+  const shareLoaded = useRef(false);
+  useEffect(() => {
+    if (shareLoaded.current) return;
+    shareLoaded.current = true;
+    try {
+      const raw = localStorage.getItem(shareStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ShareSetting;
+        if (
+          parsed &&
+          (parsed.mode === "arrive" ||
+            parsed.mode === "15m" ||
+            parsed.mode === "1h") &&
+          typeof parsed.startedAt === "number"
+        ) {
+          setShareSetting(parsed);
+          return;
+        }
+      }
+    } catch {
+      // corrupt/blocked storage — fall through to a fresh default
+    }
+    setShareSetting({ mode: "arrive", startedAt: Date.now() });
+  }, [shareStorageKey]);
+
+  // Persist whenever the setting changes (after the initial load).
+  useEffect(() => {
+    if (!shareLoaded.current) return;
+    try {
+      localStorage.setItem(shareStorageKey, JSON.stringify(shareSetting));
+    } catch {
+      // ignore storage failures; behavior degrades to in-memory only
+    }
+  }, [shareSetting, shareStorageKey]);
+
+  // Pick a sharing duration. Changing the mode (re)starts the countdown now.
+  const setShareMode = useCallback((mode: ShareMode) => {
+    setShareSetting({ mode, startedAt: Date.now() });
+  }, []);
 
   // --- Save participation (join / update eta / toggle sharing) -----------
   const saveRsvp = useCallback(
@@ -283,6 +358,48 @@ export default function EventDetailClient({
 
   const arrivedCount = people.filter((p) => p.arrived).length;
 
+  // --- Auto-stop sharing when the chosen duration / arrival is reached ----
+  // Timed modes: turn off after the elapsed duration. "arrive": turn off once my
+  // own latest ping is within ARRIVAL_RADIUS_M of the destination. Either way we
+  // flip the existing share_location flag off via the API (no DB column added).
+  const expiringShare = useRef(false);
+  useEffect(() => {
+    if (!sharing) {
+      expiringShare.current = false;
+      return;
+    }
+    function stop() {
+      if (expiringShare.current) return;
+      expiringShare.current = true;
+      saveRsvp({ shareLocation: false });
+    }
+
+    if (shareSetting.mode === "arrive") {
+      const mine = people.find((p) => p.isMe);
+      if (mine?.arrived) stop();
+      return;
+    }
+
+    const duration = SHARE_DURATION_MS[shareSetting.mode];
+    const elapsed = Date.now() - shareSetting.startedAt;
+    if (elapsed >= duration) {
+      stop();
+      return;
+    }
+    const t = setTimeout(stop, duration - elapsed);
+    return () => clearTimeout(t);
+  }, [sharing, shareSetting, people, saveRsvp]);
+
+  // Tiny hint shown next to the toggle: remaining time, or "until you arrive".
+  const shareHint = useMemo(() => {
+    if (!sharing) return null;
+    if (shareSetting.mode === "arrive") return "until you arrive";
+    const remaining =
+      SHARE_DURATION_MS[shareSetting.mode] - (now - shareSetting.startedAt);
+    if (remaining <= 0) return "stopping…";
+    return `stops in ${formatAgo(remaining)}`;
+  }, [sharing, shareSetting, now]);
+
   // "Who's coming", ordered for usefulness: arrived first, then people actively
   // moving (nearest first), then those without a live location.
   const sortedParticipants = useMemo(() => {
@@ -323,8 +440,23 @@ export default function EventDetailClient({
   // everyone's ETAs lead and your controls drop to a compact summary below.
   const youAtTop = !myRsvp?.eta;
 
+  // Expand the "You" controls and scroll them into view (used by the mobile
+  // sticky bar's ETA action). Reuses the existing etaEditing state.
+  const openEtaControls = useCallback(() => {
+    setEtaEditing(true);
+    requestAnimationFrame(() => {
+      youSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, []);
+
   const youSection = (
-    <section className="rounded-2xl border border-white/10 bg-card p-4">
+    <section
+      ref={youSectionRef}
+      className="rounded-2xl border border-white/10 bg-card p-4"
+    >
       {!joined ? (
         <>
           <h2 className="text-sm font-semibold text-gray-300">You</h2>
@@ -446,14 +578,48 @@ export default function EventDetailClient({
                   type="checkbox"
                   checked={sharing}
                   disabled={savingRsvp}
-                  onChange={(e) => saveRsvp({ shareLocation: e.target.checked })}
+                  onChange={(e) => {
+                    if (e.target.checked) setShareMode(shareSetting.mode);
+                    saveRsvp({ shareLocation: e.target.checked });
+                  }}
                   className="h-4 w-4 accent-[var(--accent)]"
                 />
                 <span>Share my live location on the way</span>
+                {shareHint && (
+                  <span className="ml-auto shrink-0 text-xs text-accent-bright">
+                    {shareHint}
+                  </span>
+                )}
               </label>
+
+              {/* How long to keep sharing on. */}
+              <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
+                <span className="text-xs text-gray-500">for</span>
+                {(
+                  [
+                    ["arrive", "Until I arrive"],
+                    ["15m", "15 min"],
+                    ["1h", "1 hour"],
+                  ] as [ShareMode, string][]
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setShareMode(mode)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      shareSetting.mode === mode
+                        ? "border-accent/60 bg-accent/15 text-accent-bright"
+                        : "border-white/15 text-gray-300 hover:border-accent/60"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <p className="mt-1 pl-7 text-xs text-gray-500">
                 On by default. Everyone with this destination&apos;s link can see
-                your live location until you turn this off.
+                your live location until sharing stops.
               </p>
             </div>
           </div>
@@ -536,7 +702,7 @@ export default function EventDetailClient({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20 sm:pb-0">
       <header>
         <Link
           href="/events"
@@ -579,7 +745,7 @@ export default function EventDetailClient({
           Live map{" "}
           <span className="font-normal text-gray-500">· everyone on the way</span>
         </h2>
-        <LiveMap destination={destination} people={people} />
+        <LiveMap destination={destination} people={people} focus={focus} />
       </section>
 
       {/* Who's coming */}
@@ -599,37 +765,71 @@ export default function EventDetailClient({
               : fresh
               ? "var(--accent)"
               : "var(--declined)";
+            const ping = livePings[p.rsvp.user_id];
+            // Freshness derived from the latest ping vs the polled `now`.
+            const agoLabel = ping
+              ? `updated ${formatAgo(now - new Date(ping.created_at).getTime())} ago`
+              : "no location yet";
+            // Only people with a live location can be focused on the map.
+            const canFocus = !!ping;
+            const focusPerson = () => {
+              if (!ping) return;
+              setFocus({ lat: ping.lat, lng: ping.lng, key: Date.now() });
+            };
             return (
-              <li
-                key={p.rsvp.id}
-                className="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-white/[0.03]"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                    style={{ background: avatarColor }}
-                  >
-                    {avatarInitials(displayName)}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{displayName}</div>
-                    <div className="text-xs text-gray-500">
-                      {p.rsvp.eta ? `ETA ${formatTime(p.rsvp.eta)}` : "No ETA set"}
+              <li key={p.rsvp.id}>
+                <div
+                  role={canFocus ? "button" : undefined}
+                  tabIndex={canFocus ? 0 : undefined}
+                  onClick={canFocus ? focusPerson : undefined}
+                  onKeyDown={
+                    canFocus
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            focusPerson();
+                          }
+                        }
+                      : undefined
+                  }
+                  className={`flex items-center justify-between gap-3 p-3 transition-colors ${
+                    canFocus
+                      ? "cursor-pointer hover:bg-white/[0.05] focus:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/60"
+                      : "hover:bg-white/[0.03]"
+                  }`}
+                  aria-label={
+                    canFocus ? `Focus ${displayName} on the map` : undefined
+                  }
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                      style={{ background: avatarColor }}
+                    >
+                      {avatarInitials(displayName)}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{displayName}</div>
+                      <div className="text-xs text-gray-500">
+                        {p.rsvp.eta ? `ETA ${formatTime(p.rsvp.eta)}` : "No ETA set"}
+                        {" · "}
+                        <span className="text-gray-600">{agoLabel}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="shrink-0 text-right text-xs">
-                  {arrived ? (
-                    <span className="rounded-full bg-going/15 px-2.5 py-1 font-semibold text-going">
-                      ✓ Arrived
-                    </span>
-                  ) : fresh && dist != null ? (
-                    <span className="rounded-full bg-accent/15 px-2.5 py-1 font-semibold text-accent-bright">
-                      {formatDistance(dist)} away
-                    </span>
-                  ) : (
-                    <span className="text-gray-600">—</span>
-                  )}
+                  <div className="shrink-0 text-right text-xs">
+                    {arrived ? (
+                      <span className="rounded-full bg-going/15 px-2.5 py-1 font-semibold text-going">
+                        ✓ Arrived
+                      </span>
+                    ) : fresh && dist != null ? (
+                      <span className="rounded-full bg-accent/15 px-2.5 py-1 font-semibold text-accent-bright">
+                        {formatDistance(dist)} away
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
+                  </div>
                 </div>
               </li>
             );
@@ -640,6 +840,43 @@ export default function EventDetailClient({
       {/* Compact controls drop below once you're set up. */}
       {!youAtTop && youSection}
       {inviteSection}
+
+      {/* Mobile-only sticky action bar: keep sharing + ETA reachable while the
+          map fills the screen. Desktop relies on the inline "You" section. */}
+      {joined && (
+        <div className="fixed inset-x-0 bottom-0 z-[1000] border-t border-white/10 bg-background/85 backdrop-blur sm:hidden">
+          <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2.5">
+            <button
+              type="button"
+              disabled={savingRsvp}
+              onClick={() => {
+                if (!sharing) setShareMode(shareSetting.mode);
+                saveRsvp({ shareLocation: !sharing });
+              }}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                sharing
+                  ? "bg-accent text-white hover:bg-accent-bright"
+                  : "border border-white/15 text-gray-200 hover:border-accent/60"
+              }`}
+              aria-pressed={sharing}
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  sharing ? "bg-white" : "bg-gray-500"
+                }`}
+              />
+              {sharing ? "Sharing on" : "Sharing off"}
+            </button>
+            <button
+              type="button"
+              onClick={openEtaControls}
+              className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 px-3 py-2.5 text-sm font-semibold text-gray-200 transition-colors hover:border-accent/60"
+            >
+              {myRsvp?.eta ? `ETA ${formatTime(myRsvp.eta)}` : "Set ETA"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
