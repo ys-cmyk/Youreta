@@ -131,6 +131,48 @@ https://<project-ref>.supabase.co/auth/v1/callback
   Google Places later by replacing the fetch in `components/PlaceAutocomplete.tsx`
   (and adding the Google endpoint to `connect-src` in `next.config.ts`).
 
+## Native apps (Capacitor)
+
+The repo is scaffolded so you can build native iOS/Android **shell** apps that
+load the live site (`https://youreta.vercel.app`). Only the config and
+dependencies live here — the `ios/` and `android/` native projects are generated
+locally (they need Xcode / Android Studio and aren't committed). The shell uses
+`capacitor.config.ts`, whose `server.url` points the native WebView at the
+deployed app, so the apps always run the latest production site (and `webDir` is
+just a placeholder — nothing is bundled).
+
+Build it locally:
+
+```bash
+npm install                # installs @capacitor/* (already in package.json)
+npx cap add ios            # generates the ios/ native project (needs macOS + Xcode)
+npx cap add android        # generates the android/ native project (needs Android Studio)
+npx cap sync               # copies config into the native projects
+npx cap open ios           # open in Xcode, then Run
+npx cap open android       # open in Android Studio, then Run
+```
+
+Notes:
+
+- **(a) Foreground location works out of the box.** The shell loads the live
+  site, so the web app's `navigator.geolocation` works inside the WebView for
+  foreground location sharing — no native code needed.
+- **(b) True _background_ location needs more wiring.** To keep posting pings
+  while the app is backgrounded, wire up `@capacitor/geolocation` plus native
+  permissions:
+  - iOS — add `NSLocationWhenInUseUsageDescription` and
+    `NSLocationAlwaysAndWhenInUseUsageDescription` to `Info.plist` (and enable
+    the Background Modes → Location capability).
+  - Android — add `ACCESS_FINE_LOCATION` and `ACCESS_BACKGROUND_LOCATION` to the
+    `AndroidManifest.xml`.
+
+  The web build deliberately does **not** import any Capacitor packages, so the
+  web app stays unchanged and keeps using `navigator.geolocation`.
+- **(c) No-build alternative:** the app is also an installable PWA — open it in a
+  mobile browser and use **Add to Home Screen** to get an app-like, installable
+  experience with the app icon and standalone display, no native toolchain
+  required.
+
 ## Notes on testing GPS locally
 
 - The Geolocation API requires a secure context — `localhost` works; a plain-HTTP

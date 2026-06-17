@@ -1,12 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+
+export const viewport: Viewport = { themeColor: "#0a0a0f" };
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://youreta.vercel.app"),
   title: "Your ETA",
   description:
     "Set a destination, share your ETA, and track each other on the way.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Your ETA",
+  },
+  icons: { icon: "/icon.svg", apple: "/apple-icon" },
   openGraph: {
     title: "Your ETA",
     description:

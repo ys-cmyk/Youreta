@@ -22,6 +22,48 @@ export default function NewDestinationPage() {
   const [place, setPlace] = useState<PlaceResult | null>(null);
   const [name, setName] = useState("");
 
+  // "Import from Luma" — paste a public lu.ma event link and prefill the form.
+  const [lumaUrl, setLumaUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [lumaError, setLumaError] = useState("");
+  const [imported, setImported] = useState(false);
+
+  async function handleImport() {
+    setLumaError("");
+    const url = lumaUrl.trim();
+    if (!url) {
+      setLumaError("Paste a lu.ma event link first.");
+      return;
+    }
+    setImporting(true);
+    setImported(false);
+    try {
+      const res = await fetch("/api/luma", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setLumaError(json.error ?? "Couldn't import that Luma link.");
+        return;
+      }
+      const label: string = json.title || json.venueName || "Destination";
+      setPlace({
+        label,
+        address: json.venueAddress || "",
+        lat: json.lat,
+        lng: json.lng,
+      });
+      setName(json.title || "");
+      setImported(true);
+    } catch {
+      setLumaError("Network error — try again.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -62,12 +104,47 @@ export default function NewDestinationPage() {
         Pick a place, share the link, and track each other on the way.
       </p>
 
+      <div className="mt-6 rounded-xl border border-white/10 bg-card p-4">
+        <label className="mb-1 block text-sm text-gray-400">
+          Import from Luma
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            inputMode="url"
+            value={lumaUrl}
+            onChange={(e) => {
+              setLumaUrl(e.target.value);
+              setLumaError("");
+              setImported(false);
+            }}
+            placeholder="https://lu.ma/your-event"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={importing}
+            className="shrink-0 rounded-full bg-white/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+          >
+            {importing ? "Importing…" : "Import"}
+          </button>
+        </div>
+        {lumaError && <p className="mt-2 text-sm text-red-400">{lumaError}</p>}
+        {imported && !lumaError && (
+          <p className="mt-2 text-sm text-emerald-400">
+            Imported — review the details below and create the destination.
+          </p>
+        )}
+      </div>
+
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
         <div>
           <label className="mb-1 block text-sm text-gray-400">Destination</label>
           <PlaceAutocomplete onSelect={setPlace} />
           {place && (
             <p className="mt-1 text-xs text-gray-500">
+              {imported && <span className="text-white">{place.label} — </span>}
               {place.address || `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`}
             </p>
           )}

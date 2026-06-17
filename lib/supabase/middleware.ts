@@ -2,8 +2,17 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "./env";
 
-// Public routes that an unauthenticated visitor is allowed to reach.
-const PUBLIC_PREFIXES = ["/login", "/auth", "/config-error"];
+// Public routes that an unauthenticated visitor is allowed to reach. Includes
+// the PWA/app-icon asset routes so the manifest and home-screen icons load
+// without a session (otherwise they'd redirect to /login).
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/auth",
+  "/config-error",
+  "/manifest.webmanifest",
+  "/apple-icon",
+  "/icon",
+];
 
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
