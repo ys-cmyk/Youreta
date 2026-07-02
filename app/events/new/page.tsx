@@ -141,7 +141,14 @@ export default function NewDestinationPage() {
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
         <div>
           <label className="mb-1 block text-sm text-gray-400">Destination</label>
-          <PlaceAutocomplete onSelect={setPlace} />
+          <PlaceAutocomplete
+            onSelect={(p) => {
+              setPlace(p);
+              // Picking a place via search supersedes a Luma import, so clear
+              // the green "Imported —" confirmation.
+              setImported(false);
+            }}
+          />
           {place && (
             <p className="mt-1 text-xs text-gray-500">
               {imported && <span className="text-white">{place.label} — </span>}

@@ -5,7 +5,13 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { EventRow, LocationPing, Participant, Rsvp } from "@/lib/types";
 import { distanceMeters, formatDistance } from "@/lib/geo";
-import { ARRIVAL_RADIUS_M, PING_INTERVAL_MS, STALE_PING_MS } from "@/lib/constants";
+import {
+  ARRIVAL_RADIUS_M,
+  ETA_AUTO_MIN_MOVE_M,
+  ETA_AUTO_RECOMPUTE_MS,
+  PING_INTERVAL_MS,
+  STALE_PING_MS,
+} from "@/lib/constants";
 import type { LivePerson, MapFocus } from "@/components/LiveMap";
 
 // How long location sharing stays on. "arrive" auto-stops once you reach the
@@ -16,6 +22,11 @@ const SHARE_DURATION_MS: Record<Exclude<ShareMode, "arrive">, number> = {
   "1h": 60 * 60_000,
 };
 type ShareSetting = { mode: ShareMode; startedAt: number };
+
+// How the current user's ETA is chosen. "auto" derives it from their live
+// location (driving time to the destination, recomputed as they move);
+// "manual" is a value they set explicitly via the chips / time picker.
+type EtaMode = "auto" | "manual";
 
 const LiveMap = dynamic(() => import("@/components/LiveMap"), {
   ssr: false,
@@ -80,6 +91,14 @@ function formatTime(iso: string | null): string {
   });
 }
 
+// Whole minutes between now and an ETA, floored at 0. Used for the "· 12 min"
+// suffix on the live ETA label.
+function etaMinutesFromNow(iso: string | null, now: number): number | null {
+  if (!iso) return null;
+  const mins = Math.round((new Date(iso).getTime() - now) / 60_000);
+  return mins < 0 ? 0 : mins;
+}
+
 // Compact "time since" label for ping freshness, e.g. "12s", "2m", "1h".
 function formatAgo(ms: number): string {
   if (ms < 0) ms = 0;
@@ -110,6 +129,10 @@ export default function EventDetailClient({
   const [myRsvp, setMyRsvp] = useState<Rsvp | null>(initialMyRsvp);
   const [etaInput, setEtaInput] = useState(toTimeInput(initialMyRsvp?.eta ?? null));
   const [savingRsvp, setSavingRsvp] = useState(false);
+
+  // ETA source: auto (from live location) vs manual. Persisted per-event so a
+  // reload keeps the user's choice. Defaults to auto.
+  const [etaMode, setEtaMode] = useState<EtaMode>("auto");
 
   // --- Invite / share -----------------------------------------------------
   const [copied, setCopied] = useState(false);
@@ -281,6 +304,99 @@ export default function EventDetailClient({
     saveRsvp({ shareLocation: true });
   }, [joined, savingRsvp, saveRsvp]);
 
+  // --- Automatic live ETA from my location -------------------------------
+  // Load the persisted ETA mode on mount.
+  const etaModeStorageKey = `yeta:etamode:${event.id}`;
+  const etaModeLoaded = useRef(false);
+  useEffect(() => {
+    if (etaModeLoaded.current) return;
+    etaModeLoaded.current = true;
+    try {
+      const raw = localStorage.getItem(etaModeStorageKey);
+      if (raw === "manual" || raw === "auto") {
+        setEtaMode(raw);
+        return;
+      }
+    } catch {
+      // corrupt/blocked storage — fall through to the default
+    }
+    setEtaMode("auto");
+  }, [etaModeStorageKey]);
+
+  // Persist whenever the mode changes (after the initial load).
+  useEffect(() => {
+    if (!etaModeLoaded.current) return;
+    try {
+      localStorage.setItem(etaModeStorageKey, etaMode);
+    } catch {
+      // ignore storage failures; behavior degrades to in-memory only
+    }
+  }, [etaMode, etaModeStorageKey]);
+
+  // Throttling state for the auto ETA: the coords/time of the last computation,
+  // and a guard so it never fires concurrently.
+  const lastEtaCalcRef = useRef<{ lat: number; lng: number; at: number } | null>(
+    null
+  );
+  const etaComputingRef = useRef(false);
+
+  const recomputeAutoEta = useCallback(
+    async (force = false) => {
+      if (etaComputingRef.current) return;
+      const mine = livePings[currentUserId];
+      if (!mine) return;
+      const last = lastEtaCalcRef.current;
+      if (!force && last) {
+        const moved = distanceMeters(
+          { lat: mine.lat, lng: mine.lng },
+          { lat: last.lat, lng: last.lng }
+        );
+        const elapsed = Date.now() - last.at;
+        if (moved < ETA_AUTO_MIN_MOVE_M && elapsed < ETA_AUTO_RECOMPUTE_MS) return;
+      }
+      etaComputingRef.current = true;
+      try {
+        const res = await fetch("/api/eta", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: { lat: mine.lat, lng: mine.lng },
+            to: { lat: event.lat, lng: event.lng },
+          }),
+        });
+        // Mark this position as computed even on non-2xx so we don't hammer the
+        // endpoint on repeated failures.
+        lastEtaCalcRef.current = { lat: mine.lat, lng: mine.lng, at: Date.now() };
+        if (!res.ok) return;
+        const json = await res.json();
+        if (typeof json.durationSec === "number" && Number.isFinite(json.durationSec)) {
+          const eta = new Date(Date.now() + json.durationSec * 1000).toISOString();
+          saveRsvp({ eta });
+        }
+        // null / non-numeric duration: keep the last ETA value.
+      } catch {
+        // network error — degrade silently, keep the last ETA value
+      } finally {
+        etaComputingRef.current = false;
+      }
+    },
+    [livePings, currentUserId, event.lat, event.lng, saveRsvp]
+  );
+
+  // Recompute when my own latest ping changes, while sharing + in auto mode.
+  // The throttle inside recomputeAutoEta caps the call rate.
+  useEffect(() => {
+    if (!sharing || etaMode !== "auto") return;
+    recomputeAutoEta();
+  }, [sharing, etaMode, recomputeAutoEta]);
+
+  // Switch back to automatic ETA and recompute immediately.
+  const useLiveEta = useCallback(() => {
+    setEtaMode("auto");
+    lastEtaCalcRef.current = null;
+    recomputeAutoEta(true);
+  }, [recomputeAutoEta]);
+
   // --- Broadcast my location while sharing -------------------------------
   useEffect(() => {
     if (!sharing) return;
@@ -440,6 +556,11 @@ export default function EventDetailClient({
   // everyone's ETAs lead and your controls drop to a compact summary below.
   const youAtTop = !myRsvp?.eta;
 
+  // The live ETA is active when the user is sharing and hasn't manually
+  // overridden it. Used to label the ETA as automatic and to add a "live" tag.
+  const autoEtaActive = sharing && etaMode === "auto";
+  const myEtaMins = etaMinutesFromNow(myRsvp?.eta ?? null, now);
+
   // Expand the "You" controls and scroll them into view (used by the mobile
   // sticky bar's ETA action). Reuses the existing etaEditing state.
   const openEtaControls = useCallback(() => {
@@ -478,9 +599,18 @@ export default function EventDetailClient({
               {avatarInitials("You")}
             </span>
             <div className="min-w-0">
-              <div className="text-sm font-medium">You</div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">You</span>
+                {autoEtaActive && (
+                  <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-bright">
+                    Live
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-gray-500">
-                ETA {formatTime(myRsvp.eta)} ·{" "}
+                {autoEtaActive ? "Live ETA " : "ETA "}
+                {formatTime(myRsvp.eta)}
+                {autoEtaActive && myEtaMins != null ? ` · ${myEtaMins} min` : ""} ·{" "}
                 {sharing ? "Sharing location" : "Not sharing"}
               </div>
             </div>
@@ -511,10 +641,31 @@ export default function EventDetailClient({
                 <label className="text-sm text-gray-400">Your ETA</label>
                 {myRsvp?.eta && (
                   <span className="text-xs font-medium text-accent-bright">
-                    Arriving ~{formatTime(myRsvp.eta)}
+                    {autoEtaActive ? "Live ETA ~" : "Arriving ~"}
+                    {formatTime(myRsvp.eta)}
+                    {autoEtaActive && myEtaMins != null ? ` · ${myEtaMins} min` : ""}
                   </span>
                 )}
               </div>
+
+              {/* Live vs manual ETA control (only meaningful while sharing). */}
+              {sharing && (
+                autoEtaActive ? (
+                  <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-bright" />
+                    Live ETA — updates automatically as you move. Set a time below
+                    to override.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={useLiveEta}
+                    className="mb-2 rounded-full border border-accent/60 bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-bright transition-colors hover:bg-accent/25"
+                  >
+                    Use live ETA
+                  </button>
+                )
+              )}
 
               {/* One tap: arrive in N minutes from now */}
               <div className="flex flex-wrap gap-2">
@@ -526,6 +677,7 @@ export default function EventDetailClient({
                     onClick={() => {
                       const iso = isoFromMinutes(m);
                       setEtaInput(toTimeInput(iso));
+                      setEtaMode("manual");
                       saveRsvp({ eta: iso });
                       setEtaEditing(false);
                     }}
@@ -549,6 +701,7 @@ export default function EventDetailClient({
                   type="button"
                   disabled={savingRsvp || !etaInput}
                   onClick={() => {
+                    setEtaMode("manual");
                     saveRsvp({ eta: isoFromTime(etaInput) });
                     setEtaEditing(false);
                   }}
@@ -562,6 +715,7 @@ export default function EventDetailClient({
                     disabled={savingRsvp}
                     onClick={() => {
                       setEtaInput("");
+                      setEtaMode("auto");
                       saveRsvp({ eta: null });
                     }}
                     className="text-xs text-gray-500 hover:text-gray-300"
@@ -809,9 +963,20 @@ export default function EventDetailClient({
                       {avatarInitials(displayName)}
                     </span>
                     <div className="min-w-0">
-                      <div className="truncate font-medium">{displayName}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{displayName}</span>
+                        {isYou && autoEtaActive && (
+                          <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-bright">
+                            Live
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-500">
-                        {p.rsvp.eta ? `ETA ${formatTime(p.rsvp.eta)}` : "No ETA set"}
+                        {p.rsvp.eta
+                          ? `${isYou && autoEtaActive ? "Live ETA" : "ETA"} ${formatTime(
+                              p.rsvp.eta
+                            )}`
+                          : "No ETA set"}
                         {" · "}
                         <span className="text-gray-600">{agoLabel}</span>
                       </div>
