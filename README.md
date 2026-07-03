@@ -209,7 +209,24 @@ Notes:
   packages — the bridge is accessed via the runtime-injected `window.Capacitor`
   global — so in plain browsers/PWA nothing changes: location sharing stays
   foreground-only (the tab must be open), exactly as before.
-- **(c) No-build alternative:** the app is also an installable PWA — open it in a
+- **(c) Native sign-in uses a `youreta://` deep link.** Inside the native shell,
+  OAuth and magic-link verification happen in the external browser (Safari),
+  which can't set cookies in the app's WebView. So on native the login page
+  sends `youreta://auth/callback?next=…` as the auth redirect instead of the
+  https callback; iOS bounces that deep link back into the app (the scheme is
+  registered via `CFBundleURLTypes` in `ios/App/App/Info.plist`), where
+  `components/DeepLinkAuthHandler.tsx` receives it through the
+  [`@capacitor/app`](https://capacitorjs.com/docs/apis/app) plugin's
+  `appUrlOpen` event (bridged plugin-free in `lib/native/deepLinkAuth.ts`) and
+  exchanges the code for a session in the WebView. After pulling this change:
+
+  1. `npm install` (picks up the new `@capacitor/app` dependency), then
+     `npx cap sync ios` so the plugin's native code is wired into the iOS
+     project, then rebuild the app in Xcode.
+  2. In the **Supabase dashboard** → **Authentication** → **URL Configuration**
+     → **Redirect URLs**, add `youreta://auth/callback` (already added to
+     `additional_redirect_urls` in `supabase/config.toml` for local dev).
+- **(d) No-build alternative:** the app is also an installable PWA — open it in a
   mobile browser and use **Add to Home Screen** to get an app-like, installable
   experience with the app icon and standalone display, no native toolchain
   required.

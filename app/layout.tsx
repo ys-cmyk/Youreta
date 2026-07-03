@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { DeepLinkAuthHandler } from "@/components/DeepLinkAuthHandler";
 
 export const viewport: Viewport = { themeColor: "#0a0a0f" };
 
@@ -36,6 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen">
+        <DeepLinkAuthHandler />
         <Nav />
         <main className="mx-auto max-w-3xl px-4 py-6">{children}</main>
       </body>

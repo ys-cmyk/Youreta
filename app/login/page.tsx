@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { OAUTH_ENABLED, GOOGLE_ENABLED, APPLE_ENABLED } from "@/lib/supabase/env";
+import { isNativePlatform } from "@/lib/native/deepLinkAuth";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -12,18 +13,48 @@ function LoginForm() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
 
+  // Un-stick the buttons whenever the page becomes visible again (e.g. the
+  // user comes back from the external browser that OAuth / a magic link opened
+  // without completing sign-in). Harmless in plain browsers too.
+  useEffect(() => {
+    const unstick = () => {
+      if (document.visibilityState === "visible") {
+        setStatus((prev) => (prev === "sending" ? "idle" : prev));
+      }
+    };
+    document.addEventListener("visibilitychange", unstick);
+    window.addEventListener("pageshow", unstick);
+    return () => {
+      document.removeEventListener("visibilitychange", unstick);
+      window.removeEventListener("pageshow", unstick);
+    };
+  }, []);
+
+  // Where the auth provider should send the user after verifying.
+  // - Browsers: back to this site's /auth/callback route (server-side
+  //   exchange sets the session cookies).
+  // - Native shell: verification happens in the external browser (Safari),
+  //   which cannot set cookies in the app's WebView — so bounce back into the
+  //   app via the youreta:// deep link, where DeepLinkAuthHandler exchanges
+  //   the code in-app.
+  function getRedirectTo(): string {
+    if (isNativePlatform()) {
+      return `youreta://auth/callback?next=${encodeURIComponent(next)}`;
+    }
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+    return `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
     setMessage("");
 
     const supabase = createClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo },
+      options: { emailRedirectTo: getRedirectTo() },
     });
 
     if (error) {
@@ -39,20 +70,24 @@ function LoginForm() {
     setMessage("");
 
     const supabase = createClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo },
+      options: { redirectTo: getRedirectTo() },
     });
 
     if (error) {
       setStatus("error");
       setMessage(error.message);
+      return;
     }
-    // On success the browser is redirected to the provider, so there is no
-    // further state to update here.
+    // On success the OAuth flow navigates away — in browsers this tab is
+    // replaced; in the native shell the system browser opens on top and this
+    // page keeps running. Reset shortly after the hand-off so the buttons are
+    // never left permanently disabled (harmless if navigation already left).
+    window.setTimeout(() => {
+      setStatus((prev) => (prev === "sending" ? "idle" : prev));
+    }, 3000);
   }
 
   return (
