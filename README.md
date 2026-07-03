@@ -134,21 +134,36 @@ https://<project-ref>.supabase.co/auth/v1/callback
 ## Native apps (Capacitor)
 
 The repo is scaffolded so you can build native iOS/Android **shell** apps that
-load the live site (`https://youreta.vercel.app`). Only the config and
-dependencies live here — the `ios/` and `android/` native projects are generated
-locally (they need Xcode / Android Studio and aren't committed). The shell uses
+load the live site (`https://youreta.vercel.app`). The shell uses
 `capacitor.config.ts`, whose `server.url` points the native WebView at the
 deployed app, so the apps always run the latest production site (and `webDir` is
 just a placeholder — nothing is bundled).
 
-Build it locally:
+The **`ios/` native project is committed** — including its location-permission
+`Info.plist` keys and the **Background Modes → Location updates** setting — so it
+builds after a fresh pull with no manual plist editing (Capacitor's own
+`ios/.gitignore` keeps Pods/build artifacts out of the repo). The **`android/`**
+project is not committed; generate it locally if you need it.
+
+The Capacitor CLI requires **Node ≥ 22** (see `.nvmrc`); on Node 20 the `cap`
+commands fail with a fatal version error.
+
+Build iOS locally (macOS + Xcode):
 
 ```bash
+nvm use                    # picks up .nvmrc → Node 22 (Capacitor CLI needs >=22)
 npm install                # installs @capacitor/* (already in package.json)
-npx cap add ios            # generates the ios/ native project (needs macOS + Xcode)
-npx cap add android        # generates the android/ native project (needs Android Studio)
-npx cap sync               # copies config into the native projects
-npx cap open ios           # open in Xcode, then Run
+npx cap sync ios           # ios/ is committed — just resync config + plugins
+npx cap open ios           # in Xcode: set your signing Team, then Run
+```
+
+Build Android locally (needs Android Studio; `android/` is not committed):
+
+```bash
+nvm use
+npm install
+npx cap add android        # generates the android/ native project
+npx cap sync android
 npx cap open android       # open in Android Studio, then Run
 ```
 
@@ -166,15 +181,13 @@ Notes:
   After `npm install`, run `npx cap sync` so the plugin is copied into the
   `ios/` / `android/` native projects, then configure each project once:
 
-  - **iOS (Xcode)**:
-    1. Add these keys to `ios/App/App/Info.plist` (both are required):
-       - `NSLocationWhenInUseUsageDescription`
-       - `NSLocationAlwaysAndWhenInUseUsageDescription`
-
-       Suggested copy for both: *"Your ETA shares your live location and
-       arrival time with the people you're meeting."*
-    2. Select the **App** target → **Signing & Capabilities** → add
-       **Background Modes** and check **Location updates**.
+  - **iOS (Xcode)**: the location setup is **already committed** in
+    `ios/App/App/Info.plist` — both `NSLocationWhenInUseUsageDescription` and
+    `NSLocationAlwaysAndWhenInUseUsageDescription` are set, and `UIBackgroundModes`
+    includes `location` (equivalent to checking **Signing & Capabilities →
+    Background Modes → Location updates**). The only manual step is selecting your
+    **development Team** (and, if needed, a unique **Bundle Identifier**) under the
+    **App** target → **Signing & Capabilities** so the app can run on a device.
 
     Apple requires the "Always" permission prompt flow — the plugin's
     `requestPermissions` handles it (iOS first grants While-Using, then offers
