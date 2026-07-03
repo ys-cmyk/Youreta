@@ -157,17 +157,45 @@ Notes:
 - **(a) Foreground location works out of the box.** The shell loads the live
   site, so the web app's `navigator.geolocation` works inside the WebView for
   foreground location sharing — no native code needed.
-- **(b) True _background_ location needs more wiring.** To keep posting pings
-  while the app is backgrounded, wire up `@capacitor/geolocation` plus native
-  permissions:
-  - iOS — add `NSLocationWhenInUseUsageDescription` and
-    `NSLocationAlwaysAndWhenInUseUsageDescription` to `Info.plist` (and enable
-    the Background Modes → Location capability).
-  - Android — add `ACCESS_FINE_LOCATION` and `ACCESS_BACKGROUND_LOCATION` to the
-    `AndroidManifest.xml`.
+- **(b) Background location is wired in — one-time native setup below.** The
+  app depends on
+  [`@capacitor-community/background-geolocation`](https://github.com/capacitor-community/background-geolocation),
+  and inside the native shell the destination page starts a background watcher
+  while location sharing is on, so pings keep posting while the app is
+  backgrounded or the screen is off (see `lib/native/backgroundLocation.ts`).
+  After `npm install`, run `npx cap sync` so the plugin is copied into the
+  `ios/` / `android/` native projects, then configure each project once:
 
-  The web build deliberately does **not** import any Capacitor packages, so the
-  web app stays unchanged and keeps using `navigator.geolocation`.
+  - **iOS (Xcode)**:
+    1. Add these keys to `ios/App/App/Info.plist` (both are required):
+       - `NSLocationWhenInUseUsageDescription`
+       - `NSLocationAlwaysAndWhenInUseUsageDescription`
+
+       Suggested copy for both: *"Your ETA shares your live location and
+       arrival time with the people you're meeting."*
+    2. Select the **App** target → **Signing & Capabilities** → add
+       **Background Modes** and check **Location updates**.
+
+    Apple requires the "Always" permission prompt flow — the plugin's
+    `requestPermissions` handles it (iOS first grants While-Using, then offers
+    the upgrade). While sharing in the background, users see the system
+    blue/location indicator; that's expected.
+  - **Android (Android Studio)**: add to
+    `android/app/src/main/AndroidManifest.xml`:
+    ```xml
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    ```
+    The plugin runs a **foreground service** while a watcher is active, showing
+    a persistent notification with the `backgroundTitle` / `backgroundMessage`
+    text set in `lib/native/backgroundLocation.ts` ("Sharing location" /
+    "Your ETA is sharing your live location.").
+
+  The web build deliberately does **not** statically import any Capacitor
+  packages — the bridge is accessed via the runtime-injected `window.Capacitor`
+  global — so in plain browsers/PWA nothing changes: location sharing stays
+  foreground-only (the tab must be open), exactly as before.
 - **(c) No-build alternative:** the app is also an installable PWA — open it in a
   mobile browser and use **Add to Home Screen** to get an app-like, installable
   experience with the app icon and standalone display, no native toolchain

@@ -13,6 +13,11 @@ import {
   STALE_PING_MS,
 } from "@/lib/constants";
 import type { LivePerson, MapFocus } from "@/components/LiveMap";
+import {
+  isNativePlatform,
+  startBackgroundWatch,
+  stopBackgroundWatch,
+} from "@/lib/native/backgroundLocation";
 
 // How long location sharing stays on. "arrive" auto-stops once you reach the
 // destination; the timed modes auto-stop after a fixed duration.
@@ -398,23 +403,87 @@ export default function EventDetailClient({
   }, [recomputeAutoEta]);
 
   // --- Broadcast my location while sharing -------------------------------
+  // Two transports, one effect:
+  //
+  // - Native shell (Capacitor): a background watcher from
+  //   @capacitor-community/background-geolocation keeps delivering fixes (and
+  //   keeps the app's JS alive) while the app is backgrounded / screen off.
+  //   The watcher can fire far more often than we want to POST, so sends are
+  //   throttled to at most one per PING_INTERVAL_MS via a last-sent ref.
+  // - Plain browser: the original foreground setInterval + navigator
+  //   .geolocation loop, unchanged (tab must stay open).
+  //
+  // Cleanup (sharing toggled off, unmount, or the share-duration auto-stop
+  // below flipping share_location off via saveRsvp) tears down whichever
+  // transport is active — the native watcher is removed via its id ref.
+  // Note: on iOS the timed auto-stop's setTimeout fires on the next JS tick
+  // the app gets; with the background watcher keeping the app alive for
+  // location callbacks, that works even while backgrounded.
+  const bgWatcherIdRef = useRef<string | null>(null);
+  const lastPingSentAtRef = useRef(0);
   useEffect(() => {
     if (!sharing) return;
     let cancelled = false;
 
-    async function pushPing() {
+    async function postPing(loc: {
+      lat: number;
+      lng: number;
+      accuracyM: number | null;
+    }) {
       try {
-        const pos = await getPosition();
-        if (cancelled) return;
         await fetch("/api/pings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             eventId: event.id,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracyM: pos.coords.accuracy ?? null,
+            lat: loc.lat,
+            lng: loc.lng,
+            accuracyM: loc.accuracyM,
           }),
+        });
+      } catch {
+        // ignore transient network errors; the next fix/tick retries
+      }
+    }
+
+    if (isNativePlatform()) {
+      // Native shell: background watcher instead of the foreground interval.
+      lastPingSentAtRef.current = 0;
+      startBackgroundWatch((loc) => {
+        if (cancelled) return;
+        // Throttle: the watcher can fire per movement; POST at most once per
+        // PING_INTERVAL_MS.
+        const now = Date.now();
+        if (now - lastPingSentAtRef.current < PING_INTERVAL_MS) return;
+        lastPingSentAtRef.current = now;
+        postPing(loc);
+      }).then((id) => {
+        if (!id) return;
+        if (cancelled) {
+          // Effect already cleaned up while the watcher was starting.
+          stopBackgroundWatch(id);
+          return;
+        }
+        bgWatcherIdRef.current = id;
+      });
+      return () => {
+        cancelled = true;
+        if (bgWatcherIdRef.current) {
+          stopBackgroundWatch(bgWatcherIdRef.current);
+          bgWatcherIdRef.current = null;
+        }
+      };
+    }
+
+    // Browser: existing foreground behavior, untouched.
+    async function pushPing() {
+      try {
+        const pos = await getPosition();
+        if (cancelled) return;
+        await postPing({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracyM: pos.coords.accuracy ?? null,
         });
       } catch {
         // ignore transient geolocation errors; the next tick retries
