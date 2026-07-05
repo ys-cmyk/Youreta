@@ -33,15 +33,18 @@ function LoginForm() {
   // Where the auth provider should send the user after verifying.
   // - Browsers: back to this site's /auth/callback route (server-side
   //   exchange sets the session cookies).
-  // - Native shell: verification happens in the external browser (Safari),
-  //   which cannot set cookies in the app's WebView — so bounce back into the
-  //   app via the youreta:// deep link, where DeepLinkAuthHandler exchanges
-  //   the code in-app.
+  // - Native shell: verification happens in the external browser, which
+  //   cannot set cookies in the app's WebView. Land on /auth/native-callback
+  //   (an https page — always redirectable), which hops into the app via the
+  //   youreta:// deep link, with an explicit button as the fallback: some
+  //   browsers (Chrome on iOS) block automatic redirects into custom schemes
+  //   but always allow a user tap. DeepLinkAuthHandler then exchanges the
+  //   code in-app.
   function getRedirectTo(): string {
-    if (isNativePlatform()) {
-      return `youreta://auth/callback?next=${encodeURIComponent(next)}`;
-    }
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+    if (isNativePlatform()) {
+      return `${siteUrl}/auth/native-callback?next=${encodeURIComponent(next)}`;
+    }
     return `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
   }
 
