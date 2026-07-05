@@ -13,6 +13,38 @@ function LoginForm() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
 
+  // Code entry after the email is sent: the emailed 6-digit code signs the
+  // user in directly via verifyOtp — no browser hop, no deep link. This is the
+  // most reliable path inside the native shell, and a handy fallback anywhere.
+  const [otp, setOtp] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [otpError, setOtpError] = useState("");
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    const token = otp.trim();
+    if (token.length < 6) {
+      setOtpError("Enter the 6-digit code from the email.");
+      return;
+    }
+    setVerifying(true);
+    setOtpError("");
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "email",
+    });
+    setVerifying(false);
+    if (error) {
+      setOtpError(error.message);
+      return;
+    }
+    const safeNext =
+      next.startsWith("/") && !next.startsWith("//") ? next : "/events";
+    window.location.assign(safeNext);
+  }
+
   // Un-stick the buttons whenever the page becomes visible again (e.g. the
   // user comes back from the external browser that OAuth / a magic link opened
   // without completing sign-in). Harmless in plain browsers too.
@@ -113,9 +145,44 @@ function LoginForm() {
       </div>
 
       {status === "sent" ? (
-        <div className="ec-expand mt-8 rounded-2xl border border-going/40 bg-going/10 p-4 text-center text-sm">
-          <span className="font-semibold text-going">✓</span> Check{" "}
-          <span className="font-semibold">{email}</span> for a sign-in link.
+        <div className="ec-expand mt-8 space-y-4">
+          <div className="rounded-2xl border border-going/40 bg-going/10 p-4 text-center text-sm">
+            <span className="font-semibold text-going">✓</span> Check{" "}
+            <span className="font-semibold">{email}</span> for your sign-in
+            code.
+          </div>
+          <form onSubmit={handleVerifyOtp} className="space-y-3">
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={otp}
+              onChange={(e) => {
+                setOtp(e.target.value.replace(/\D/g, ""));
+                setOtpError("");
+              }}
+              placeholder="6-digit code"
+              className="input px-4 py-3 text-center text-lg tracking-[0.4em]"
+              aria-label="6-digit sign-in code"
+            />
+            <button
+              type="submit"
+              disabled={verifying || otp.length < 6}
+              className="btn btn-primary min-h-12 w-full px-4 shadow-lg shadow-accent/20"
+            >
+              {verifying && <span className="spinner" aria-hidden />}
+              {verifying ? "Signing in…" : "Sign in with code"}
+            </button>
+            {otpError && (
+              <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+                {otpError}
+              </p>
+            )}
+            <p className="text-center text-xs text-gray-500">
+              Or tap the button in the email — either works.
+            </p>
+          </form>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
