@@ -1,26 +1,72 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isNativePlatform, onAppUrlOpen } from "@/lib/native/deepLinkAuth";
 
 // Completes the auth flow inside the native shell. OAuth / magic-link
-// verification happens in the external browser (Safari), which then redirects
-// to `youreta://auth/callback?code=...&next=...`; iOS bounces that deep link
-// back into the app, where we exchange the code for a session in the WebView.
+// verification happens in the external browser, which then lands on
+// /auth/native-callback and hops into the app via
+// `youreta://auth/callback?code=...&next=...`; we exchange the code for a
+// session here in the WebView.
 //
 // PKCE note: the code_verifier was stored in the WebView's storage when the
 // login page initiated the flow (signInWithOtp / signInWithOAuth), so
 // `exchangeCodeForSession(code)` succeeds here in-app even though the code was
 // minted via the external browser.
 //
-// Renders nothing; mounted once in app/layout.tsx. No-ops in plain browsers.
+// Deep links can arrive twice for one sign-in (getLaunchUrl on cold start +
+// the appUrlOpen event), so codes are deduped. Progress and failure are shown
+// in a small toast — a silent failure looks like "nothing happened".
+const handledCodes = new Set<string>();
+
 export function DeepLinkAuthHandler() {
+  const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
+  const [detail, setDetail] = useState("");
+
   useEffect(() => {
     if (!isNativePlatform()) return;
 
     let unsubscribe: (() => void) | null = null;
     let unmounted = false;
+
+    const handleDeepLink = async (url: string) => {
+      const parsed = parseAuthCallbackUrl(url);
+      if (!parsed) return; // not an auth deep link; ignore
+
+      const { code, next } = parsed;
+      if (!code) {
+        setStatus("error");
+        setDetail("The sign-in link was missing its code. Try again.");
+        return;
+      }
+      if (handledCodes.has(code)) return;
+      handledCodes.add(code);
+
+      setStatus("working");
+      setDetail("");
+      try {
+        const supabase = createClient();
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setStatus("error");
+          setDetail(error.message);
+          return;
+        }
+        // Only allow internal redirects: a single leading slash, never
+        // "//host", so a crafted next can't bounce the user to another site.
+        // Full page navigation (not router.push) so the middleware sees the
+        // fresh cookies.
+        const safeNext =
+          next && next.startsWith("/") && !next.startsWith("//")
+            ? next
+            : "/events";
+        window.location.assign(safeNext);
+      } catch (e) {
+        setStatus("error");
+        setDetail(e instanceof Error ? e.message : "Unexpected error.");
+      }
+    };
 
     void onAppUrlOpen((url) => {
       void handleDeepLink(url);
@@ -38,37 +84,32 @@ export function DeepLinkAuthHandler() {
     };
   }, []);
 
-  return null;
-}
+  if (status === "idle") return null;
 
-async function handleDeepLink(url: string) {
-  const parsed = parseAuthCallbackUrl(url);
-  if (!parsed) return; // not an auth deep link; ignore
-
-  const { code, next } = parsed;
-  if (!code) {
-    window.location.assign("/auth/auth-code-error");
-    return;
-  }
-
-  try {
-    const supabase = createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      window.location.assign("/auth/auth-code-error");
-      return;
-    }
-    // Only allow internal redirects: a single leading slash, never "//host",
-    // so a crafted next can't bounce the user to another site. Full page
-    // navigation (not router.push) so the middleware sees the fresh cookies.
-    const safeNext =
-      next && next.startsWith("/") && !next.startsWith("//")
-        ? next
-        : "/events";
-    window.location.assign(safeNext);
-  } catch {
-    window.location.assign("/auth/auth-code-error");
-  }
+  return (
+    <div
+      role="status"
+      className="fixed inset-x-4 z-[2000] mx-auto max-w-sm rounded-xl border border-white/15 bg-card p-3 text-center text-sm shadow-xl shadow-black/50"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
+    >
+      {status === "working" ? (
+        <span className="inline-flex items-center gap-2">
+          <span className="spinner" aria-hidden />
+          Finishing sign-in…
+        </span>
+      ) : (
+        <span className="text-red-300">
+          Sign-in didn&apos;t complete{detail ? `: ${detail}` : "."}{" "}
+          <button
+            className="font-semibold text-white underline"
+            onClick={() => window.location.assign("/login")}
+          >
+            Try again
+          </button>
+        </span>
+      )}
+    </div>
+  );
 }
 
 function parseAuthCallbackUrl(

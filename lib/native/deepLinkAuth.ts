@@ -22,6 +22,7 @@ type AppPlugin = {
     eventName: "appUrlOpen",
     listener: (event: { url: string }) => void
   ): Promise<PluginListenerHandle> | PluginListenerHandle;
+  getLaunchUrl?: () => Promise<{ url?: string } | null | undefined>;
 };
 
 type CapacitorGlobal = {
@@ -52,6 +53,16 @@ export async function onAppUrlOpen(
     }
     const app = cap.registerPlugin("App") as AppPlugin;
     if (typeof app?.addListener !== "function") return noop;
+
+    // Cold start: if the OS opened the app *via* the deep link, the appUrlOpen
+    // event fired before this subscription existed — the URL is only available
+    // through getLaunchUrl(). Deliver it through the same callback.
+    try {
+      const launch = await app.getLaunchUrl?.();
+      if (launch?.url) cb(launch.url);
+    } catch {
+      // best-effort; warm-open events still arrive via the listener below
+    }
 
     const handle = await app.addListener("appUrlOpen", ({ url }) => {
       try {
