@@ -27,13 +27,13 @@ export function isSupabaseConfigured(): boolean {
   return /^https?:\/\/.+/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 0;
 }
 
-// Social sign-in visibility. Google is configured in Supabase, so it shows by
-// default (set NEXT_PUBLIC_ENABLE_GOOGLE="false" to hide it). Apple stays
-// opt-in until its provider is configured (NEXT_PUBLIC_ENABLE_APPLE="true").
-// The legacy NEXT_PUBLIC_ENABLE_OAUTH="true" force-enables both.
+// Social sign-in visibility. Both providers are configured in Supabase, so
+// both show by default; set NEXT_PUBLIC_ENABLE_GOOGLE="false" /
+// NEXT_PUBLIC_ENABLE_APPLE="false" to hide one. The legacy
+// NEXT_PUBLIC_ENABLE_OAUTH="true" force-enables both.
 const oauthAll = process.env.NEXT_PUBLIC_ENABLE_OAUTH === "true";
 export const GOOGLE_ENABLED =
   oauthAll || process.env.NEXT_PUBLIC_ENABLE_GOOGLE !== "false";
 export const APPLE_ENABLED =
-  oauthAll || process.env.NEXT_PUBLIC_ENABLE_APPLE === "true";
+  oauthAll || process.env.NEXT_PUBLIC_ENABLE_APPLE !== "false";
 export const OAUTH_ENABLED = GOOGLE_ENABLED || APPLE_ENABLED;
