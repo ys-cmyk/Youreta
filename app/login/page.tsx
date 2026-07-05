@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient, createImplicitClient } from "@/lib/supabase/client";
 import { OAUTH_ENABLED, GOOGLE_ENABLED, APPLE_ENABLED } from "@/lib/supabase/env";
@@ -364,6 +365,15 @@ function LoginForm() {
           )}
         </form>
       )}
+
+      <p className="mt-8 text-center text-xs text-gray-500">
+        <Link
+          href="/privacy"
+          className="underline-offset-2 transition-colors hover:text-gray-300 hover:underline"
+        >
+          Privacy Policy
+        </Link>
+      </p>
     </div>
   );
 }

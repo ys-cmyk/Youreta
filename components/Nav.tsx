@@ -51,15 +51,13 @@ export async function Nav() {
                 <span className="sm:hidden">New</span>
                 <span className="hidden sm:inline">New destination</span>
               </Link>
-              <form action="/auth/signout" method="post">
-                <button
-                  type="submit"
-                  className="flex min-h-11 items-center rounded-lg px-2.5 text-gray-400 transition-colors hover:text-white"
-                  title={user.email ?? undefined}
-                >
-                  Sign out
-                </button>
-              </form>
+              <Link
+                href="/account"
+                className="flex min-h-11 items-center rounded-lg px-2.5 text-gray-400 transition-colors hover:text-white"
+                title={user.email ?? undefined}
+              >
+                Account
+              </Link>
             </>
           ) : (
             <Link

@@ -7,6 +7,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "./env";
 // without a session (otherwise they'd redirect to /login).
 const PUBLIC_PREFIXES = [
   "/login",
+  "/privacy",
   "/auth",
   "/config-error",
   "/manifest.webmanifest",

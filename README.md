@@ -147,6 +147,17 @@ https://<project-ref>.supabase.co/auth/v1/callback
   app additionally prunes your own stale pings each time you post a new one.
   Users can also delete their own pings at any time (RLS delete policy). The
   live map only ever uses the last 15 minutes.
+- **Account deletion (Apple guideline 5.1.1(v)).** Signed-in users can
+  permanently delete their account in-app from the **Account** page
+  (`/account`): it calls the `ec_delete_account` RPC, which deletes their
+  `auth.users` row so the on-delete-cascade foreign keys remove their profile,
+  hosted destinations, participations, check-ins, and location pings. Apply the
+  migration by pasting
+  [`supabase/migrations/20260705051623_account_deletion.sql`](./supabase/migrations/20260705051623_account_deletion.sql)
+  into the Supabase **SQL Editor** and running it (idempotent; the same block is
+  appended to [`supabase/checkin-schema.sql`](./supabase/checkin-schema.sql)), or
+  let the Supabase **GitHub integration** apply it. A public
+  [privacy policy](https://youreta.app/privacy) lives at `/privacy`.
 - **Applying the hardening migration**: paste
   [`supabase/migrations/20260705031208_security_hardening.sql`](./supabase/migrations/20260705031208_security_hardening.sql)
   into the Supabase **SQL Editor** and run it (it's idempotent; the same
