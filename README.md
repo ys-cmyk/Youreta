@@ -161,7 +161,7 @@ https://<project-ref>.supabase.co/auth/v1/callback
 ## Native apps (Capacitor)
 
 The repo is scaffolded so you can build native iOS/Android **shell** apps that
-load the live site (`https://youreta.vercel.app`). The shell uses
+load the live site (`https://youreta.app`). The shell uses
 `capacitor.config.ts`, whose `server.url` points the native WebView at the
 deployed app, so the apps always run the latest production site (and `webDir` is
 just a placeholder — nothing is bundled).

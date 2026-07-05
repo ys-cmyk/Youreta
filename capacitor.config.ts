@@ -12,7 +12,9 @@ const config: CapacitorConfig = {
   appName: "Your ETA",
   webDir: "public",
   server: {
-    url: "https://youreta.vercel.app",
+    // Takes effect at the next `npx cap sync ios` + rebuild; existing builds
+    // keep loading the old URL (which Vercel continues to serve).
+    url: "https://youreta.app",
     cleartext: false,
   },
 };

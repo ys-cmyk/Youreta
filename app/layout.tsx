@@ -8,7 +8,7 @@ import { DeepLinkAuthHandler } from "@/components/DeepLinkAuthHandler";
 export const viewport: Viewport = { themeColor: "#0a0a0f", viewportFit: "cover" };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://youreta.vercel.app"),
+  metadataBase: new URL("https://youreta.app"),
   title: "Your ETA",
   description:
     "Set a destination, share your ETA, and track each other on the way.",
