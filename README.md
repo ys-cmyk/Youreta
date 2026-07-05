@@ -169,6 +169,45 @@ https://<project-ref>.supabase.co/auth/v1/callback
   pg_cron (Dashboard → Database → Extensions) and re-run that section, or
   rely on the app-side purge.
 
+## App Review demo access
+
+Apple's App Review needs to sign in without receiving a real email. The
+`/api/review-login` route lets **one** configured email sign in with a **fixed
+6-digit code** through the normal `/login` UI — the reviewer just types the demo
+email, requests the code, then enters the fixed code (no real email required;
+the login page reveals the code box even if sending reports an error).
+
+The gate is **entirely server-side** and off by default. Set these three env
+vars **in Vercel** (Project → Settings → Environment Variables). They must
+**NEVER** be prefixed `NEXT_PUBLIC` — the secret key would leak into the browser
+bundle:
+
+| Env var | Value |
+| --- | --- |
+| `SUPABASE_SECRET_KEY` | Supabase **Settings → API Keys → secret key** (service-role). Falls back to `SUPABASE_SERVICE_ROLE_KEY` if unset. Server-only; never logged or returned. |
+| `REVIEW_EMAIL` | The single email allowed to use the fixed code, e.g. `applereview@youreta.app`. |
+| `REVIEW_CODE` | The fixed 6-digit code, e.g. `000000`. |
+
+How the gate works:
+
+- The login page POSTs `{ email, code }` to `/api/review-login` **before** its
+  normal `verifyOtp` call. A `200` signs the session cookies in and redirects; a
+  non-200 falls through silently to the real magic-link/OTP flow, so real users
+  are unaffected.
+- The route accepts **only** the one `REVIEW_EMAIL` (constant-time compared) and
+  the exact `REVIEW_CODE`. A wrong email or wrong code returns the same generic
+  `401` (no leak of which was wrong).
+- If **any** of the three vars is missing, the route returns **404** — the
+  feature does not exist unless deliberately configured.
+- On success it uses the secret key to ensure the account exists and mint a real
+  one-time OTP server-side (no email sent), then verifies it on the cookie-backed
+  server client — a genuine session, not a bypass.
+
+**Seed the demo account with real content** so reviewers see a working app:
+sign in once as `REVIEW_EMAIL`, create a destination (set an address), and share
+your live location, so the reviewer lands on a populated destination instead of
+an empty state.
+
 ## Native apps (Capacitor)
 
 The repo is scaffolded so you can build native iOS/Android **shell** apps that

@@ -76,6 +76,30 @@ function LoginForm() {
     }
     setVerifying(true);
     setOtpError("");
+
+    const safeNext =
+      next.startsWith("/") && !next.startsWith("//") ? next : "/events";
+
+    // App Review demo sign-in: let the server decide whether this email+code is
+    // the configured reviewer account. A 200 signs the session cookies in
+    // server-side; anything else falls through silently to the normal flow, so
+    // real users are unaffected (the extra request is negligible). The server —
+    // not this client — is the only place any email is special-cased.
+    try {
+      const res = await fetch("/api/review-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: token }),
+      });
+      if (res.ok) {
+        setVerifying(false);
+        window.location.assign(safeNext);
+        return;
+      }
+    } catch {
+      // Network error — fall through to the normal verifyOtp path below.
+    }
+
     const supabase = createClient();
     const { error } = await supabase.auth.verifyOtp({
       email,
@@ -87,8 +111,6 @@ function LoginForm() {
       setOtpError(error.message);
       return;
     }
-    const safeNext =
-      next.startsWith("/") && !next.startsWith("//") ? next : "/events";
     window.location.assign(safeNext);
   }
 
@@ -198,6 +220,52 @@ function LoginForm() {
     }, 3000);
   }
 
+  // The 6-digit code entry: a reveal link that expands into the code form.
+  // Shown after a magic link is sent, and also beneath a send error so a
+  // fixed-code (App Review) account can still reach the code input even when
+  // signInWithOtp reports an error. The server decides whether the code is valid.
+  function codeEntry() {
+    return !codeOpen ? (
+      <button
+        type="button"
+        onClick={() => setCodeOpen(true)}
+        className="mx-auto block text-center text-sm text-gray-400 underline-offset-2 transition-colors hover:text-white hover:underline"
+      >
+        Link not working? Enter the 6-digit code instead
+      </button>
+    ) : (
+      <form onSubmit={handleVerifyOtp} className="ec-expand space-y-3">
+        <input
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]*"
+          maxLength={6}
+          value={otp}
+          onChange={(e) => {
+            setOtp(e.target.value.replace(/\D/g, ""));
+            setOtpError("");
+          }}
+          placeholder="6-digit code"
+          className="input px-4 py-3 text-center text-lg tracking-[0.4em]"
+          aria-label="6-digit sign-in code"
+        />
+        <button
+          type="submit"
+          disabled={verifying || otp.length < 6}
+          className="btn btn-primary min-h-12 w-full px-4 shadow-lg shadow-accent/20"
+        >
+          {verifying && <span className="spinner" aria-hidden />}
+          {verifying ? "Signing in…" : "Sign in with code"}
+        </button>
+        {otpError && (
+          <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+            {otpError}
+          </p>
+        )}
+      </form>
+    );
+  }
+
   return (
     <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center py-12">
       {/* Subtle brand gradient glow behind the heading. */}
@@ -234,45 +302,7 @@ function LoginForm() {
             <span className="font-semibold">{email}</span> and tap the sign-in
             button in the email.
           </div>
-          {!codeOpen ? (
-            <button
-              type="button"
-              onClick={() => setCodeOpen(true)}
-              className="mx-auto block text-center text-sm text-gray-400 underline-offset-2 transition-colors hover:text-white hover:underline"
-            >
-              Link not working? Enter the 6-digit code instead
-            </button>
-          ) : (
-          <form onSubmit={handleVerifyOtp} className="ec-expand space-y-3">
-            <input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={otp}
-              onChange={(e) => {
-                setOtp(e.target.value.replace(/\D/g, ""));
-                setOtpError("");
-              }}
-              placeholder="6-digit code"
-              className="input px-4 py-3 text-center text-lg tracking-[0.4em]"
-              aria-label="6-digit sign-in code"
-            />
-            <button
-              type="submit"
-              disabled={verifying || otp.length < 6}
-              className="btn btn-primary min-h-12 w-full px-4 shadow-lg shadow-accent/20"
-            >
-              {verifying && <span className="spinner" aria-hidden />}
-              {verifying ? "Signing in…" : "Sign in with code"}
-            </button>
-            {otpError && (
-              <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
-                {otpError}
-              </p>
-            )}
-          </form>
-          )}
+          {codeEntry()}
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
@@ -293,9 +323,14 @@ function LoginForm() {
             {status === "sending" ? "Sending…" : "Send magic link"}
           </button>
           {status === "error" && (
-            <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
-              {message}
-            </p>
+            <div className="ec-expand space-y-4">
+              <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+                {message}
+              </p>
+              {/* Even when sending failed, offer the 6-digit code path so a
+                  fixed-code (App Review) account can still sign in. */}
+              {codeEntry()}
+            </div>
           )}
 
           {OAUTH_ENABLED && !oauthUsable && (
