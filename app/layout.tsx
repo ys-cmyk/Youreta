@@ -3,7 +3,9 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { DeepLinkAuthHandler } from "@/components/DeepLinkAuthHandler";
 
-export const viewport: Viewport = { themeColor: "#0a0a0f" };
+// viewport-fit=cover lets the app paint edge-to-edge in the iOS shell / PWA;
+// the nav and sticky bar pad themselves with env(safe-area-inset-*).
+export const viewport: Viewport = { themeColor: "#0a0a0f", viewportFit: "cover" };
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://youreta.vercel.app"),

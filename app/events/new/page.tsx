@@ -7,13 +7,8 @@ import PlaceAutocomplete, { type PlaceResult } from "@/components/PlaceAutocompl
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
-  loading: () => (
-    <div className="h-56 animate-pulse rounded-xl border border-white/10 bg-card" />
-  ),
+  loading: () => <div className="card h-56 animate-pulse" />,
 });
-
-const inputClass =
-  "w-full rounded-lg border border-white/15 bg-transparent px-3 py-2.5 text-white placeholder-gray-500 focus:border-transparent focus:ring-2 focus:ring-accent";
 
 export default function NewDestinationPage() {
   const router = useRouter();
@@ -23,6 +18,8 @@ export default function NewDestinationPage() {
   const [name, setName] = useState("");
 
   // "Import from Luma" — paste a public lu.ma event link and prefill the form.
+  // Collapsed by default so picking a place stays the primary path.
+  const [lumaOpen, setLumaOpen] = useState(false);
   const [lumaUrl, setLumaUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [lumaError, setLumaError] = useState("");
@@ -104,43 +101,11 @@ export default function NewDestinationPage() {
         Pick a place, share the link, and track each other on the way.
       </p>
 
-      <div className="mt-6 rounded-xl border border-white/10 bg-card p-4">
-        <label className="mb-1 block text-sm text-gray-400">
-          Import from Luma
-        </label>
-        <div className="flex gap-2">
-          <input
-            type="url"
-            inputMode="url"
-            value={lumaUrl}
-            onChange={(e) => {
-              setLumaUrl(e.target.value);
-              setLumaError("");
-              setImported(false);
-            }}
-            placeholder="https://lu.ma/your-event"
-            className={inputClass}
-          />
-          <button
-            type="button"
-            onClick={handleImport}
-            disabled={importing}
-            className="shrink-0 rounded-full bg-white/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
-          >
-            {importing ? "Importing…" : "Import"}
-          </button>
-        </div>
-        {lumaError && <p className="mt-2 text-sm text-red-400">{lumaError}</p>}
-        {imported && !lumaError && (
-          <p className="mt-2 text-sm text-emerald-400">
-            Imported — review the details below and create the destination.
-          </p>
-        )}
-      </div>
-
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
         <div>
-          <label className="mb-1 block text-sm text-gray-400">Destination</label>
+          <label className="mb-1.5 block text-sm font-medium text-gray-300">
+            Destination
+          </label>
           <PlaceAutocomplete
             onSelect={(p) => {
               setPlace(p);
@@ -150,7 +115,7 @@ export default function NewDestinationPage() {
             }}
           />
           {place && (
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1.5 text-xs text-gray-400">
               {imported && <span className="text-white">{place.label} — </span>}
               {place.address || `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`}
             </p>
@@ -162,27 +127,87 @@ export default function NewDestinationPage() {
         )}
 
         <div>
-          <label className="mb-1 block text-sm text-gray-400">
-            Name (optional)
+          <label className="mb-1.5 block text-sm font-medium text-gray-300">
+            Name <span className="font-normal text-gray-500">(optional)</span>
           </label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={place?.label ?? "Defaults to the place name"}
-            className={inputClass}
+            className="input"
           />
         </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
+          className="btn btn-primary min-h-12 w-full px-4 shadow-lg shadow-accent/20"
         >
+          {submitting && <span className="spinner" aria-hidden />}
           {submitting ? "Creating…" : "Create destination"}
         </button>
       </form>
+
+      {/* Secondary path: prefill from a public Luma event link. */}
+      <div className="card mt-6">
+        <button
+          type="button"
+          onClick={() => setLumaOpen((o) => !o)}
+          aria-expanded={lumaOpen}
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left text-sm text-gray-400 transition-colors hover:text-white"
+        >
+          <span>Have a Luma event? Import it</span>
+          <span
+            aria-hidden
+            className={`text-gray-500 transition-transform duration-200 ${
+              lumaOpen ? "rotate-180" : ""
+            }`}
+          >
+            ▾
+          </span>
+        </button>
+        {lumaOpen && (
+          <div className="ec-expand px-4 pb-4">
+            <div className="flex gap-2">
+              <input
+                type="url"
+                inputMode="url"
+                value={lumaUrl}
+                onChange={(e) => {
+                  setLumaUrl(e.target.value);
+                  setLumaError("");
+                  setImported(false);
+                }}
+                placeholder="https://lu.ma/your-event"
+                className="input"
+              />
+              <button
+                type="button"
+                onClick={handleImport}
+                disabled={importing}
+                className="btn btn-secondary min-h-11 shrink-0 px-4 text-sm"
+              >
+                {importing && <span className="spinner h-3.5 w-3.5" aria-hidden />}
+                {importing ? "Importing…" : "Import"}
+              </button>
+            </div>
+            {lumaError && (
+              <p className="ec-expand mt-2 text-sm text-red-300">{lumaError}</p>
+            )}
+            {imported && !lumaError && (
+              <p className="ec-expand mt-2 text-sm text-going">
+                Imported — review the details above and create the destination.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

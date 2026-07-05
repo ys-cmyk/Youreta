@@ -110,8 +110,9 @@ function LoginForm() {
       </div>
 
       {status === "sent" ? (
-        <div className="mt-8 rounded-xl border border-going/40 bg-going/10 p-4 text-center text-sm">
-          Check <span className="font-semibold">{email}</span> for a sign-in link.
+        <div className="ec-expand mt-8 rounded-2xl border border-going/40 bg-going/10 p-4 text-center text-sm">
+          <span className="font-semibold text-going">✓</span> Check{" "}
+          <span className="font-semibold">{email}</span> for a sign-in link.
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
@@ -121,27 +122,30 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-gray-500 transition-colors focus:border-transparent focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-accent"
+            className="input px-4 py-3"
           />
           <button
             type="submit"
             disabled={status === "sending"}
-            className="w-full rounded-full bg-accent px-4 py-3 font-semibold text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-bright disabled:opacity-50"
+            className="btn btn-primary min-h-12 w-full px-4 shadow-lg shadow-accent/20"
           >
+            {status === "sending" && <span className="spinner" aria-hidden />}
             {status === "sending" ? "Sending…" : "Send magic link"}
           </button>
           {status === "error" && (
-            <p className="text-sm text-red-400">{message}</p>
+            <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+              {message}
+            </p>
           )}
 
           {OAUTH_ENABLED && (
           <>
           <div className="flex items-center gap-3 pt-2">
-            <span className="h-px flex-1 bg-white/15" />
-            <span className="text-xs uppercase tracking-wide text-gray-500">
+            <span className="h-px flex-1 bg-white/10" />
+            <span className="text-xs uppercase tracking-wider text-gray-500">
               or
             </span>
-            <span className="h-px flex-1 bg-white/15" />
+            <span className="h-px flex-1 bg-white/10" />
           </div>
 
           {GOOGLE_ENABLED && (
@@ -149,7 +153,7 @@ function LoginForm() {
             type="button"
             onClick={() => handleOAuth("google")}
             disabled={status === "sending"}
-            className="flex w-full items-center justify-center gap-3 rounded-full border border-white/15 bg-white px-4 py-3 font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-50"
+            className="btn min-h-12 w-full gap-3 bg-white px-4 text-gray-900 hover:bg-gray-100"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -178,7 +182,7 @@ function LoginForm() {
             type="button"
             onClick={() => handleOAuth("apple")}
             disabled={status === "sending"}
-            className="flex w-full items-center justify-center gap-3 rounded-full border border-white/15 bg-black px-4 py-3 font-semibold text-white hover:bg-white/10 disabled:opacity-50"
+            className="btn min-h-12 w-full gap-3 border border-white/20 bg-black px-4 text-white hover:border-white/40"
           >
             <svg
               className="h-5 w-5"

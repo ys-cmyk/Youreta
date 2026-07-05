@@ -2,19 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import PlaceAutocomplete, { type PlaceResult } from "@/components/PlaceAutocomplete";
 import type { EventRow } from "@/lib/types";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
-  loading: () => (
-    <div className="h-56 animate-pulse rounded-xl border border-white/10 bg-card" />
-  ),
+  loading: () => <div className="card h-56 animate-pulse" />,
 });
-
-const inputClass =
-  "w-full rounded-lg border border-white/15 bg-transparent px-3 py-2.5 text-white placeholder-gray-500 focus:border-transparent focus:ring-2 focus:ring-accent";
 
 export default function EditDestinationClient({ event }: { event: EventRow }) {
   const router = useRouter();
@@ -80,22 +76,34 @@ export default function EditDestinationClient({ event }: { event: EventRow }) {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight">Edit destination</h1>
+      <Link
+        href={`/events/${event.id}`}
+        className="inline-flex min-h-8 items-center rounded-lg text-xs text-gray-400 transition-colors hover:text-white"
+      >
+        ← Back to {event.title}
+      </Link>
+      <h1 className="mt-1 text-2xl font-bold tracking-tight">
+        Edit destination
+      </h1>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
         <div>
-          <label className="mb-1 block text-sm text-gray-400">Name</label>
+          <label className="mb-1.5 block text-sm font-medium text-gray-300">
+            Name
+          </label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={place.label}
-            className={inputClass}
+            className="input"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-gray-400">Destination</label>
-          <p className="text-sm text-gray-300">
+          <label className="mb-1.5 block text-sm font-medium text-gray-300">
+            Destination
+          </label>
+          <p className="text-sm text-gray-400">
             {place.label}
             {place.address ? ` · ${place.address}` : ""}
           </p>
@@ -103,12 +111,12 @@ export default function EditDestinationClient({ event }: { event: EventRow }) {
             <button
               type="button"
               onClick={() => setChangingPlace(true)}
-              className="mt-2 text-sm text-accent-bright hover:underline"
+              className="mt-2 inline-flex min-h-8 items-center rounded-lg text-sm font-medium text-accent-bright transition-colors hover:text-white"
             >
               Change location
             </button>
           ) : (
-            <div className="mt-2">
+            <div className="ec-expand mt-2">
               <PlaceAutocomplete onSelect={(p) => p && setPlace(p)} />
             </div>
           )}
@@ -116,24 +124,35 @@ export default function EditDestinationClient({ event }: { event: EventRow }) {
 
         <MapPicker value={{ lat: place.lat, lng: place.lng }} />
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p className="ec-expand rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
           disabled={submitting || deleting}
-          className="w-full rounded-full bg-accent px-4 py-3 font-semibold text-white hover:bg-accent-bright disabled:opacity-50"
+          className="btn btn-primary min-h-12 w-full px-4 shadow-lg shadow-accent/20"
         >
+          {submitting && <span className="spinner" aria-hidden />}
           {submitting ? "Saving…" : "Save changes"}
         </button>
 
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={submitting || deleting}
-          className="w-full rounded-full border border-red-500/40 px-4 py-3 font-semibold text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-        >
-          {deleting ? "Deleting…" : "Delete destination"}
-        </button>
+        <div className="border-t border-white/10 pt-5">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={submitting || deleting}
+            className="btn btn-danger min-h-11 w-full px-4 text-sm"
+          >
+            {deleting && <span className="spinner h-3.5 w-3.5" aria-hidden />}
+            {deleting ? "Deleting…" : "Delete destination"}
+          </button>
+          <p className="mt-2 text-center text-xs text-gray-500">
+            Removes everyone&apos;s ETAs and locations for this destination.
+          </p>
+        </div>
       </form>
     </div>
   );

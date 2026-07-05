@@ -42,28 +42,30 @@ export default async function DestinationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">Your destinations</h1>
         <Link
           href="/events/new"
-          className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-bright"
+          className="btn btn-primary min-h-10 shrink-0 px-4 text-sm"
         >
-          + New
+          <span className="sm:hidden">+ New</span>
+          <span className="hidden sm:inline">+ New destination</span>
         </Link>
       </div>
 
       {destinations.length === 0 ? (
-        <div className="mt-10 rounded-2xl border border-white/10 bg-card p-10 text-center">
+        <div className="card mt-6 p-10 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-2xl">
             📍
           </div>
-          <p className="text-sm font-medium text-gray-200">No destinations yet</p>
-          <p className="mx-auto mt-1 max-w-xs text-sm text-gray-500">
-            Create a destination, share the link, and track each other on the way.
+          <p className="font-semibold">No destinations yet</p>
+          <p className="mx-auto mt-1 max-w-xs text-sm text-gray-400">
+            Create a destination, share the link, and track each other on the
+            way.
           </p>
           <Link
             href="/events/new"
-            className="mt-5 inline-block rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-bright"
+            className="btn btn-primary mt-6 min-h-11 px-5 text-sm shadow-lg shadow-accent/20"
           >
             Create your first destination
           </Link>
@@ -74,7 +76,7 @@ export default async function DestinationsPage() {
             <li key={e.id}>
               <Link
                 href={`/events/${e.id}`}
-                className="group flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-card p-4 transition-all hover:border-accent/60 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-black/20"
+                className="card group flex items-center justify-between gap-3 p-4 transition-all duration-150 hover:border-accent/60 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-black/20"
               >
                 <div className="min-w-0">
                   <div className="truncate text-lg font-semibold">{e.title}</div>
@@ -84,7 +86,10 @@ export default async function DestinationsPage() {
                     </div>
                   )}
                 </div>
-                <span className="shrink-0 text-gray-600 transition-all group-hover:translate-x-0.5 group-hover:text-accent-bright">
+                <span
+                  aria-hidden
+                  className="shrink-0 text-gray-500 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-accent-bright"
+                >
                   →
                 </span>
               </Link>

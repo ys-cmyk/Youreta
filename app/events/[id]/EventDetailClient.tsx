@@ -35,9 +35,7 @@ type EtaMode = "auto" | "manual";
 
 const LiveMap = dynamic(() => import("@/components/LiveMap"), {
   ssr: false,
-  loading: () => (
-    <div className="h-[26rem] animate-pulse rounded-2xl border border-white/10 bg-card" />
-  ),
+  loading: () => <div className="card h-[26rem] animate-pulse" />,
 });
 
 function getPosition(): Promise<GeolocationPosition> {
@@ -643,23 +641,21 @@ export default function EventDetailClient({
   }, []);
 
   const youSection = (
-    <section
-      ref={youSectionRef}
-      className="rounded-2xl border border-white/10 bg-card p-4"
-    >
+    <section ref={youSectionRef} className="card p-4">
       {!joined ? (
         <>
-          <h2 className="text-sm font-semibold text-gray-300">You</h2>
+          <h2 className="section-label">You</h2>
           <button
             disabled={savingRsvp}
             onClick={() => saveRsvp({ shareLocation: true })}
-            className="mt-3 w-full rounded-full bg-accent px-4 py-3 font-semibold text-white transition-colors hover:bg-accent-bright disabled:opacity-50"
+            className="btn btn-primary mt-3 min-h-12 w-full px-4 shadow-lg shadow-accent/20"
           >
+            {savingRsvp && <span className="spinner" aria-hidden />}
             {savingRsvp ? "Joining…" : "Join & share my ETA"}
           </button>
         </>
       ) : myRsvp?.eta && !etaEditing ? (
-        <div className="flex items-center justify-between gap-3">
+        <div key="you-summary" className="ec-expand flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <span
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -671,12 +667,12 @@ export default function EventDetailClient({
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">You</span>
                 {autoEtaActive && (
-                  <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-bright">
+                  <span className="pill pill-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                     Live
                   </span>
                 )}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-400">
                 {autoEtaActive ? "Live ETA " : "ETA "}
                 {formatTime(myRsvp.eta)}
                 {autoEtaActive && myEtaMins != null ? ` · ${myEtaMins} min` : ""} ·{" "}
@@ -686,7 +682,7 @@ export default function EventDetailClient({
           </div>
           <button
             onClick={() => setEtaEditing(true)}
-            className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:border-accent/60"
+            className="btn btn-secondary min-h-9 shrink-0 px-3.5 text-xs"
           >
             Edit
           </button>
@@ -694,20 +690,22 @@ export default function EventDetailClient({
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-300">You</h2>
+            <h2 className="section-label">You</h2>
             {myRsvp?.eta && (
               <button
                 onClick={() => setEtaEditing(false)}
-                className="text-xs text-gray-400 hover:text-white"
+                className="btn min-h-8 px-2.5 text-xs font-semibold text-gray-400 hover:text-white"
               >
                 Done
               </button>
             )}
           </div>
-          <div className="mt-3 space-y-4">
+          <div key="you-editing" className="ec-expand mt-3 space-y-4">
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <label className="text-sm text-gray-400">Your ETA</label>
+                <label className="text-sm font-medium text-gray-300">
+                  Your ETA
+                </label>
                 {myRsvp?.eta && (
                   <span className="text-xs font-medium text-accent-bright">
                     {autoEtaActive ? "Live ETA ~" : "Arriving ~"}
@@ -720,7 +718,7 @@ export default function EventDetailClient({
               {/* Live vs manual ETA control (only meaningful while sharing). */}
               {sharing && (
                 autoEtaActive ? (
-                  <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-500">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
                     <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-bright" />
                     Live ETA — updates automatically as you move. Set a time below
                     to override.
@@ -729,7 +727,7 @@ export default function EventDetailClient({
                   <button
                     type="button"
                     onClick={useLiveEta}
-                    className="mb-2 rounded-full border border-accent/60 bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-bright transition-colors hover:bg-accent/25"
+                    className="chip chip-on mb-2 min-h-9 px-3.5 text-xs font-semibold"
                   >
                     Use live ETA
                   </button>
@@ -750,7 +748,7 @@ export default function EventDetailClient({
                       saveRsvp({ eta: iso });
                       setEtaEditing(false);
                     }}
-                    className="rounded-full border border-white/15 px-3 py-1.5 text-sm font-medium text-gray-200 transition-colors hover:border-accent/60 disabled:opacity-50"
+                    className="chip min-h-10 px-3.5 text-sm"
                   >
                     {m < 60 ? `${m} min` : "1 hr"}
                   </button>
@@ -758,13 +756,13 @@ export default function EventDetailClient({
               </div>
 
               {/* Or pick an exact arrival time */}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-gray-500">or arrive at</span>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-400">or arrive at</span>
                 <input
                   type="time"
                   value={etaInput}
                   onChange={(e) => setEtaInput(e.target.value)}
-                  className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-accent"
+                  className="input min-h-10 w-auto px-3 py-1.5"
                 />
                 <button
                   type="button"
@@ -774,7 +772,7 @@ export default function EventDetailClient({
                     saveRsvp({ eta: isoFromTime(etaInput) });
                     setEtaEditing(false);
                   }}
-                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:border-accent/60 disabled:opacity-50"
+                  className="btn btn-secondary min-h-10 px-4 text-sm"
                 >
                   Set
                 </button>
@@ -787,7 +785,7 @@ export default function EventDetailClient({
                       setEtaMode("auto");
                       saveRsvp({ eta: null });
                     }}
-                    className="text-xs text-gray-500 hover:text-gray-300"
+                    className="btn min-h-10 px-2.5 text-xs font-semibold text-gray-400 hover:text-white"
                   >
                     Clear
                   </button>
@@ -796,7 +794,7 @@ export default function EventDetailClient({
             </div>
 
             <div>
-              <label className="flex items-center gap-3 text-sm">
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={sharing}
@@ -805,7 +803,7 @@ export default function EventDetailClient({
                     if (e.target.checked) setShareMode(shareSetting.mode);
                     saveRsvp({ shareLocation: e.target.checked });
                   }}
-                  className="h-4 w-4 accent-[var(--accent)]"
+                  className="h-5 w-5 shrink-0 accent-[var(--accent)]"
                 />
                 <span>Share my live location on the way</span>
                 {shareHint && (
@@ -816,8 +814,8 @@ export default function EventDetailClient({
               </label>
 
               {/* How long to keep sharing on. */}
-              <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
-                <span className="text-xs text-gray-500">for</span>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-8">
+                <span className="text-xs text-gray-400">for</span>
                 {(
                   [
                     ["arrive", "Until I arrive"],
@@ -829,10 +827,9 @@ export default function EventDetailClient({
                     key={mode}
                     type="button"
                     onClick={() => setShareMode(mode)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      shareSetting.mode === mode
-                        ? "border-accent/60 bg-accent/15 text-accent-bright"
-                        : "border-white/15 text-gray-300 hover:border-accent/60"
+                    aria-pressed={shareSetting.mode === mode}
+                    className={`chip min-h-9 px-3 text-xs ${
+                      shareSetting.mode === mode ? "chip-on" : ""
                     }`}
                   >
                     {label}
@@ -840,8 +837,8 @@ export default function EventDetailClient({
                 ))}
               </div>
 
-              <p className="mt-1 pl-7 text-xs text-gray-500">
-                On by default. Everyone with this destination&apos;s link can see
+              <p className="mt-2 pl-8 text-xs text-gray-500">
+                On by default. Anyone with this destination&apos;s link can see
                 your live location until sharing stops.
               </p>
             </div>
@@ -852,20 +849,20 @@ export default function EventDetailClient({
   );
 
   const inviteSection = inviteOpen ? (
-    <section className="rounded-2xl border border-accent/30 bg-card p-4">
+    <section key="invite-open" className="card ec-expand border-accent/30 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-200">
+          <h2 className="text-sm font-semibold">
             Invite people to share their ETA
           </h2>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-400">
             Anyone with this link can join and see everyone&apos;s live location
             and ETA.
           </p>
         </div>
         <button
           onClick={() => setInviteOpen(false)}
-          className="shrink-0 text-xs text-gray-400 hover:text-white"
+          className="btn -mr-1 min-h-8 shrink-0 px-2.5 text-xs font-semibold text-gray-400 hover:text-white"
         >
           Hide
         </button>
@@ -875,48 +872,53 @@ export default function EventDetailClient({
           readOnly
           value={shareUrl}
           onFocus={(e) => e.currentTarget.select()}
-          className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-gray-300"
+          className="input min-w-0 flex-1 truncate text-sm text-gray-300"
         />
         <button
           onClick={copyLink}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-bright"
+          className="btn btn-primary min-h-11 shrink-0 px-4 text-sm"
         >
-          {copied ? "Copied!" : "Copy link"}
+          {copied ? "✓ Copied" : "Copy link"}
         </button>
       </div>
       <div className="mt-2 flex gap-2">
         <a
           href={mailtoHref}
-          className="flex-1 rounded-full border border-white/15 px-4 py-2 text-center text-sm font-semibold text-gray-200 transition-colors hover:border-accent/60"
+          className="btn btn-secondary min-h-11 flex-1 px-4 text-sm"
         >
           Email invite
         </a>
         <button
           onClick={shareSheet}
-          className="flex-1 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:border-accent/60"
+          className="btn btn-secondary min-h-11 flex-1 px-4 text-sm"
         >
           Share…
         </button>
       </div>
     </section>
   ) : (
-    <section className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-card p-3">
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-gray-200">Invite people</div>
-        <div className="truncate text-xs text-gray-500">
+    <section
+      key="invite-closed"
+      className="card ec-expand flex items-center justify-between gap-3 p-3"
+    >
+      <div className="min-w-0 pl-1">
+        <div className="text-sm font-semibold">Invite people</div>
+        <div className="truncate text-xs text-gray-400">
           Share the link so others can share their ETA
         </div>
       </div>
       <div className="flex shrink-0 gap-2">
         <button
           onClick={copyLink}
-          className="rounded-full border border-white/15 px-3 py-1.5 text-sm font-semibold text-gray-200 transition-colors hover:border-accent/60"
+          className={`btn btn-secondary min-h-10 px-3.5 text-sm ${
+            copied ? "text-going" : ""
+          }`}
         >
-          {copied ? "Copied!" : "Copy link"}
+          {copied ? "✓ Copied" : "Copy link"}
         </button>
         <button
           onClick={() => setInviteOpen(true)}
-          className="rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent-bright"
+          className="btn btn-primary min-h-10 px-3.5 text-sm"
         >
           Invite
         </button>
@@ -925,11 +927,11 @@ export default function EventDetailClient({
   );
 
   return (
-    <div className="space-y-5 pb-20 sm:pb-0">
+    <div className="space-y-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-0">
       <header>
         <Link
           href="/events"
-          className="text-xs text-gray-500 transition-colors hover:text-gray-300"
+          className="inline-flex min-h-8 items-center rounded-lg text-xs text-gray-400 transition-colors hover:text-white"
         >
           ← Destinations
         </Link>
@@ -937,7 +939,7 @@ export default function EventDetailClient({
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
             {event.venue_name && (
-              <p className="mt-1 text-gray-300">
+              <p className="mt-1 text-sm text-gray-300">
                 📍 {event.venue_name}
                 {event.venue_address ? ` · ${event.venue_address}` : ""}
               </p>
@@ -946,15 +948,22 @@ export default function EventDetailClient({
           {isHost && (
             <Link
               href={`/events/${event.id}/edit`}
-              className="shrink-0 text-xs text-gray-400 transition-colors hover:text-white"
+              className="btn btn-secondary min-h-9 shrink-0 px-3.5 text-xs"
             >
               Edit
             </Link>
           )}
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          {participants.length} {participants.length === 1 ? "person" : "people"} ·{" "}
-          {arrivedCount} arrived
+        <p className="mt-2 text-xs text-gray-400">
+          {participants.length} {participants.length === 1 ? "person" : "people"}
+          {" · "}
+          {arrivedCount > 0 ? (
+            <span className="font-medium text-going">
+              {arrivedCount} arrived
+            </span>
+          ) : (
+            "0 arrived"
+          )}
           {soonestEta ? ` · next ~${formatTime(soonestEta)}` : ""}
         </p>
       </header>
@@ -964,21 +973,26 @@ export default function EventDetailClient({
 
       {/* Live map — the hero */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-gray-300">
+        <h2 className="section-label mb-2">
           Live map{" "}
-          <span className="font-normal text-gray-500">· everyone on the way</span>
+          <span className="font-normal normal-case tracking-normal text-gray-500">
+            · everyone on the way
+          </span>
         </h2>
         <LiveMap destination={destination} people={people} focus={focus} />
       </section>
 
       {/* Who's coming */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-gray-300">
-          Who&apos;s coming ({participants.length})
+        <h2 className="section-label mb-2">
+          Who&apos;s coming{" "}
+          <span className="font-normal text-gray-500">· {participants.length}</span>
         </h2>
-        <ul className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10 bg-card">
+        <ul className="card divide-y divide-white/10 overflow-hidden">
           {sortedParticipants.length === 0 && (
-            <li className="p-4 text-sm text-gray-500">No one has joined yet.</li>
+            <li className="p-4 text-sm text-gray-400">
+              No one has joined yet — share the invite link below.
+            </li>
           )}
           {sortedParticipants.map(({ p, dist, arrived, fresh }) => {
             const isYou = p.rsvp.user_id === currentUserId;
@@ -1015,10 +1029,8 @@ export default function EventDetailClient({
                         }
                       : undefined
                   }
-                  className={`flex items-center justify-between gap-3 p-3 transition-colors ${
-                    canFocus
-                      ? "cursor-pointer hover:bg-white/[0.05] focus:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/60"
-                      : "hover:bg-white/[0.03]"
+                  className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-150 focus-visible:[outline-offset:-2px] ${
+                    canFocus ? "cursor-pointer hover:bg-white/[0.05]" : ""
                   }`}
                   aria-label={
                     canFocus ? `Focus ${displayName} on the map` : undefined
@@ -1033,35 +1045,35 @@ export default function EventDetailClient({
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">{displayName}</span>
+                        <span className="truncate text-sm font-medium">
+                          {displayName}
+                        </span>
                         {isYou && autoEtaActive && (
-                          <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-bright">
+                          <span className="pill pill-accent shrink-0 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                             Live
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-400">
                         {p.rsvp.eta
                           ? `${isYou && autoEtaActive ? "Live ETA" : "ETA"} ${formatTime(
                               p.rsvp.eta
                             )}`
                           : "No ETA set"}
                         {" · "}
-                        <span className="text-gray-600">{agoLabel}</span>
+                        <span className="text-gray-500">{agoLabel}</span>
                       </div>
                     </div>
                   </div>
                   <div className="shrink-0 text-right text-xs">
                     {arrived ? (
-                      <span className="rounded-full bg-going/15 px-2.5 py-1 font-semibold text-going">
-                        ✓ Arrived
-                      </span>
+                      <span className="pill pill-going">✓ Arrived</span>
                     ) : fresh && dist != null ? (
-                      <span className="rounded-full bg-accent/15 px-2.5 py-1 font-semibold text-accent-bright">
+                      <span className="pill pill-accent">
                         {formatDistance(dist)} away
                       </span>
                     ) : (
-                      <span className="text-gray-600">—</span>
+                      <span className="text-gray-500">—</span>
                     )}
                   </div>
                 </div>
@@ -1078,7 +1090,10 @@ export default function EventDetailClient({
       {/* Mobile-only sticky action bar: keep sharing + ETA reachable while the
           map fills the screen. Desktop relies on the inline "You" section. */}
       {joined && (
-        <div className="fixed inset-x-0 bottom-0 z-[1000] border-t border-white/10 bg-background/85 backdrop-blur sm:hidden">
+        <div
+          className="fixed inset-x-0 bottom-0 z-[1000] border-t border-white/10 bg-background/85 backdrop-blur sm:hidden"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
           <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2.5">
             <button
               type="button"
@@ -1087,16 +1102,14 @@ export default function EventDetailClient({
                 if (!sharing) setShareMode(shareSetting.mode);
                 saveRsvp({ shareLocation: !sharing });
               }}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                sharing
-                  ? "bg-accent text-white hover:bg-accent-bright"
-                  : "border border-white/15 text-gray-200 hover:border-accent/60"
+              className={`btn min-h-11 flex-1 px-3 text-sm ${
+                sharing ? "btn-primary" : "btn-secondary"
               }`}
               aria-pressed={sharing}
             >
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${
-                  sharing ? "bg-white" : "bg-gray-500"
+                  sharing ? "ec-pulse-dot bg-white" : "bg-gray-500"
                 }`}
               />
               {sharing ? "Sharing on" : "Sharing off"}
@@ -1104,7 +1117,7 @@ export default function EventDetailClient({
             <button
               type="button"
               onClick={openEtaControls}
-              className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 px-3 py-2.5 text-sm font-semibold text-gray-200 transition-colors hover:border-accent/60"
+              className="btn btn-secondary min-h-11 flex-1 px-3 text-sm"
             >
               {myRsvp?.eta ? `ETA ${formatTime(myRsvp.eta)}` : "Set ETA"}
             </button>

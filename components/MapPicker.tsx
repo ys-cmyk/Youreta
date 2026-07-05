@@ -24,7 +24,7 @@ export default function MapPicker({ value }: { value: LatLng | null }) {
   const center: [number, number] = value ? [value.lat, value.lng] : [37.7749, -122.4194];
 
   return (
-    <div className="h-56 overflow-hidden rounded-xl border border-white/10">
+    <div className="h-56 overflow-hidden rounded-2xl border border-white/10 shadow-lg shadow-black/30">
       <MapContainer
         center={center}
         zoom={value ? 15 : 11}

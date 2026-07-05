@@ -41,9 +41,6 @@ function describe(p: PhotonFeature["properties"]): { label: string; address: str
   return { label, address };
 }
 
-const inputClass =
-  "w-full rounded-lg border border-white/15 bg-transparent px-3 py-2.5 text-white placeholder-gray-500 focus:border-transparent focus:ring-2 focus:ring-accent";
-
 export default function PlaceAutocomplete({
   onSelect,
   placeholder = "Search for a place or address…",
@@ -131,20 +128,23 @@ export default function PlaceAutocomplete({
         }}
         onFocus={() => results.length > 0 && setOpen(true)}
         placeholder={placeholder}
-        className={inputClass}
+        className="input pr-10"
         autoComplete="off"
       />
       {loading && (
-        <span className="absolute right-3 top-3 text-xs text-gray-500">…</span>
+        <span
+          aria-hidden
+          className="spinner absolute right-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500"
+        />
       )}
       {open && results.length > 0 && (
-        <ul className="absolute z-[1100] mt-1 w-full overflow-hidden rounded-lg border border-white/15 bg-card shadow-lg">
+        <ul className="ec-expand absolute z-[1100] mt-2 w-full divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-card shadow-xl shadow-black/40">
           {results.map((r, i) => (
             <li key={`${r.lat},${r.lng},${i}`}>
               <button
                 type="button"
                 onClick={() => choose(r)}
-                className="block w-full px-3 py-2.5 text-left hover:bg-white/5"
+                className="block w-full px-3.5 py-2.5 text-left transition-colors duration-150 hover:bg-white/5 focus-visible:[outline-offset:-2px]"
               >
                 <div className="truncate text-sm font-medium text-white">{r.label}</div>
                 {r.address && (
