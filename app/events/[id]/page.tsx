@@ -18,22 +18,23 @@ export default async function EventDetailPage({
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const { data: event } = await supabase
-    .from("ec_events")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle<EventRow>();
-  if (!event) notFound();
-
-  const [{ data: rsvps }, { data: pings }] = await Promise.all([
+  // Fetch everything in one parallel round-trip. Pings are bounded to the live
+  // window (the client's poll uses the same cutoff) — without the filter this
+  // query grows unboundedly as people share.
+  const pingCutoff = new Date(Date.now() - 15 * 60_000).toISOString();
+  const [{ data: event }, { data: rsvps }, { data: pings }] = await Promise.all([
+    supabase.from("ec_events").select("*").eq("id", id).maybeSingle<EventRow>(),
     supabase.from("ec_rsvps").select("*").eq("event_id", id).returns<Rsvp[]>(),
     supabase
       .from("ec_location_pings")
       .select("*")
       .eq("event_id", id)
+      .gte("created_at", pingCutoff)
       .order("created_at", { ascending: false })
+      .limit(500)
       .returns<LocationPing[]>(),
   ]);
+  if (!event) notFound();
 
   const userIds = Array.from(new Set((rsvps ?? []).map((r) => r.user_id)));
   const { data: profiles } = userIds.length

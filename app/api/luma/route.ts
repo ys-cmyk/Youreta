@@ -29,8 +29,10 @@ type LdEvent = {
   location?: LdLocation;
 };
 
-// Only ever fetch lu.ma (or its subdomains) over https. This is the critical
-// SSRF guard: never fetch an arbitrary host supplied by the client.
+// Only ever fetch Luma's own hosts over https — both the legacy lu.ma domain
+// and luma.com, which event links now use. This is the critical SSRF guard:
+// never fetch an arbitrary host supplied by the client.
+const LUMA_HOSTS = ["lu.ma", "luma.com"];
 function isAllowedLumaUrl(raw: string): URL | null {
   let url: URL;
   try {
@@ -40,8 +42,10 @@ function isAllowedLumaUrl(raw: string): URL | null {
   }
   if (url.protocol !== "https:") return null;
   const host = url.hostname.toLowerCase();
-  if (host !== "lu.ma" && !host.endsWith(".lu.ma")) return null;
-  return url;
+  const allowed = LUMA_HOSTS.some(
+    (h) => host === h || host.endsWith("." + h)
+  );
+  return allowed ? url : null;
 }
 
 function toNumber(v: unknown): number | null {
@@ -137,7 +141,7 @@ export async function POST(request: NextRequest) {
   const url = isAllowedLumaUrl(rawUrl);
   if (!url) {
     return NextResponse.json(
-      { error: "That doesn't look like a lu.ma event link." },
+      { error: "That doesn't look like a Luma event link (lu.ma or luma.com)." },
       { status: 400 }
     );
   }

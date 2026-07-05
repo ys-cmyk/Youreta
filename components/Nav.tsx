@@ -6,10 +6,14 @@ async function getCurrentUser() {
   if (!isSupabaseConfigured()) return null;
   try {
     const supabase = await createClient();
+    // getSession() reads the cookie without a network round-trip — the nav only
+    // decides which links to show. Real auth enforcement (token validation +
+    // refresh) already happened in the middleware's getUser() on this request,
+    // so this is display-only and saves a Supabase auth call on every page.
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user;
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user ?? null;
   } catch {
     // Never let the global nav take down every page over an auth/config hiccup.
     return null;

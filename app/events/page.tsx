@@ -10,7 +10,9 @@ export default async function DestinationsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Destinations the user hosts, plus destinations they've joined.
+  // Destinations the user hosts, plus destinations they've joined — two
+  // parallel queries; the joined set embeds the event through the rsvp->event
+  // foreign key, avoiding a second sequential round-trip.
   const [{ data: hosted }, { data: joinedRows }] = await Promise.all([
     user
       ? supabase
@@ -22,23 +24,18 @@ export default async function DestinationsPage() {
     user
       ? supabase
           .from("ec_rsvps")
-          .select("event_id")
+          .select("ec_events(*)")
           .eq("user_id", user.id)
-          .returns<{ event_id: string }[]>()
-      : Promise.resolve({ data: [] as { event_id: string }[] }),
+          .returns<{ ec_events: EventRow | null }[]>()
+      : Promise.resolve({ data: [] as { ec_events: EventRow | null }[] }),
   ]);
 
-  const joinedIds = (joinedRows ?? []).map((r) => r.event_id);
-  const { data: joined } = joinedIds.length
-    ? await supabase
-        .from("ec_events")
-        .select("*")
-        .in("id", joinedIds)
-        .returns<EventRow[]>()
-    : { data: [] as EventRow[] };
+  const joined = (joinedRows ?? [])
+    .map((r) => r.ec_events)
+    .filter((e): e is EventRow => e !== null);
 
   const byId = new Map<string, EventRow>();
-  for (const e of [...(hosted ?? []), ...(joined ?? [])]) byId.set(e.id, e);
+  for (const e of [...(hosted ?? []), ...joined]) byId.set(e.id, e);
   const destinations = Array.from(byId.values()).sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
