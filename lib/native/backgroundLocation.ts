@@ -40,9 +40,11 @@ type BackgroundGeolocationPlugin = {
 type CapacitorGlobal = {
   isNativePlatform?: () => boolean;
   registerPlugin?: (name: string) => unknown;
+  isPluginAvailable?: (name: string) => boolean;
+  Plugins?: Record<string, unknown>;
 };
 
-function getCapacitor(): CapacitorGlobal | undefined {
+export function getCapacitor(): CapacitorGlobal | undefined {
   if (typeof window === "undefined") return undefined;
   return (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
 }
@@ -57,6 +59,27 @@ export function isNativePlatform(): boolean {
 }
 
 /**
+ * Resolve a native plugin by name, trying both access paths: the injected
+ * `Capacitor.Plugins.<Name>` proxy map (how remote-URL shells expose plugins)
+ * first, then `registerPlugin(name)` (bundled runtimes). Returns null in
+ * browsers or when the plugin isn't in this build.
+ */
+export function getNativePlugin<T>(name: string): T | null {
+  try {
+    const cap = getCapacitor();
+    if (!isNativePlatform() || !cap) return null;
+    const fromMap = cap.Plugins?.[name];
+    if (fromMap) return fromMap as T;
+    if (typeof cap.registerPlugin === "function") {
+      return (cap.registerPlugin(name) as T) ?? null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Start a background location watcher via the native plugin. Invokes
  * `onLocation` for each fix (also while the app is backgrounded / screen off).
  * Resolves with the watcher id to pass to `stopBackgroundWatch`, or null when
@@ -67,13 +90,9 @@ export async function startBackgroundWatch(
   onError?: (msg: string) => void
 ): Promise<string | null> {
   try {
-    const cap = getCapacitor();
-    if (!isNativePlatform() || typeof cap?.registerPlugin !== "function") {
-      return null;
-    }
-    const plugin = cap.registerPlugin(
+    const plugin = getNativePlugin<BackgroundGeolocationPlugin>(
       "BackgroundGeolocation"
-    ) as BackgroundGeolocationPlugin;
+    );
     if (typeof plugin?.addWatcher !== "function") return null;
 
     const id = await plugin.addWatcher(
@@ -108,11 +127,9 @@ export async function startBackgroundWatch(
 /** Stop a watcher started by `startBackgroundWatch`. Safe to call anywhere. */
 export async function stopBackgroundWatch(id: string): Promise<void> {
   try {
-    const cap = getCapacitor();
-    if (typeof cap?.registerPlugin !== "function") return;
-    const plugin = cap.registerPlugin(
+    const plugin = getNativePlugin<BackgroundGeolocationPlugin>(
       "BackgroundGeolocation"
-    ) as BackgroundGeolocationPlugin;
+    );
     await plugin?.removeWatcher?.({ id });
   } catch {
     // best-effort teardown; nothing to surface

@@ -11,7 +11,11 @@
 
 export { isNativePlatform } from "./backgroundLocation";
 
-import { isNativePlatform } from "./backgroundLocation";
+import {
+  isNativePlatform,
+  getNativePlugin,
+  getCapacitor,
+} from "./backgroundLocation";
 
 type PluginListenerHandle = {
   remove: () => Promise<void>;
@@ -25,17 +29,6 @@ type AppPlugin = {
   getLaunchUrl?: () => Promise<{ url?: string } | null | undefined>;
 };
 
-type CapacitorGlobal = {
-  isNativePlatform?: () => boolean;
-  registerPlugin?: (name: string) => unknown;
-  isPluginAvailable?: (name: string) => boolean;
-};
-
-function getCapacitor(): CapacitorGlobal | undefined {
-  if (typeof window === "undefined") return undefined;
-  return (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
-}
-
 const noop = () => {};
 
 /**
@@ -47,13 +40,13 @@ const noop = () => {};
  */
 export function isDeepLinkCapable(): boolean {
   try {
-    const cap = getCapacitor();
     if (!isNativePlatform()) return false;
-    if (typeof cap?.isPluginAvailable === "function") {
-      return cap.isPluginAvailable("App");
-    }
-    // Older bridge without isPluginAvailable: assume capable.
-    return typeof cap?.registerPlugin === "function";
+    // Capable if the plugin resolves through either access path (the injected
+    // Plugins map or registerPlugin) with a usable addListener.
+    const app = getNativePlugin<AppPlugin>("App");
+    if (app && typeof app.addListener === "function") return true;
+    // Last resort: trust the bridge's own availability check.
+    return getCapacitor()?.isPluginAvailable?.("App") === true;
   } catch {
     return false;
   }
@@ -69,11 +62,7 @@ export async function onAppUrlOpen(
   cb: (url: string) => void
 ): Promise<() => void> {
   try {
-    const cap = getCapacitor();
-    if (!isNativePlatform() || typeof cap?.registerPlugin !== "function") {
-      return noop;
-    }
-    const app = cap.registerPlugin("App") as AppPlugin;
+    const app = getNativePlugin<AppPlugin>("App");
     if (typeof app?.addListener !== "function") return noop;
 
     // Cold start: if the OS opened the app *via* the deep link, the appUrlOpen

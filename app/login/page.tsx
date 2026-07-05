@@ -19,6 +19,37 @@ function LoginForm() {
   const [otp, setOtp] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [otpError, setOtpError] = useState("");
+  // The emailed button is the primary path; the 6-digit code is a fallback
+  // revealed on demand (e.g. when the link lands in the wrong browser/app).
+  const [codeOpen, setCodeOpen] = useState(false);
+
+  // Hidden diagnostics: triple-tap the brand mark to see how the native bridge
+  // exposes plugins in this build. Harmless in browsers.
+  const [diagTaps, setDiagTaps] = useState(0);
+  const showDiag = diagTaps >= 3;
+  function diagInfo(): string {
+    try {
+      const cap = (window as unknown as { Capacitor?: Record<string, unknown> })
+        .Capacitor;
+      if (!cap) return "no Capacitor global (plain browser)";
+      const plugins = cap.Plugins ? Object.keys(cap.Plugins as object) : [];
+      const avail = (
+        cap.isPluginAvailable as ((n: string) => boolean) | undefined
+      )?.("App");
+      return JSON.stringify(
+        {
+          native: (cap.isNativePlatform as (() => boolean) | undefined)?.(),
+          keys: Object.keys(cap),
+          plugins,
+          appAvailable: avail,
+        },
+        null,
+        1
+      );
+    } catch (e) {
+      return String(e);
+    }
+  }
 
   // In the native shell, OAuth can only complete if this build can receive
   // youreta:// deep links. If it can't (plugin missing from the build), hide
@@ -144,9 +175,17 @@ function LoginForm() {
       />
 
       <div className="text-center">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-bright to-accent text-2xl text-white shadow-lg shadow-accent/30">
+        <div
+          onClick={() => setDiagTaps((n) => n + 1)}
+          className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-bright to-accent text-2xl text-white shadow-lg shadow-accent/30"
+        >
           ◎
         </div>
+        {showDiag && (
+          <pre className="mx-auto mt-2 max-w-full overflow-x-auto rounded-lg border border-white/10 bg-black/40 p-2 text-left text-[10px] text-gray-400">
+            {diagInfo()}
+          </pre>
+        )}
         <h1 className="text-3xl font-bold tracking-tight">Welcome to Your ETA</h1>
         <p className="mx-auto mt-2 max-w-xs text-sm text-gray-400">
           Set a destination, share your ETA, and track each other on the way.
@@ -158,10 +197,19 @@ function LoginForm() {
         <div className="ec-expand mt-8 space-y-4">
           <div className="rounded-2xl border border-going/40 bg-going/10 p-4 text-center text-sm">
             <span className="font-semibold text-going">✓</span> Check{" "}
-            <span className="font-semibold">{email}</span> for your sign-in
-            code.
+            <span className="font-semibold">{email}</span> and tap the sign-in
+            button in the email.
           </div>
-          <form onSubmit={handleVerifyOtp} className="space-y-3">
+          {!codeOpen ? (
+            <button
+              type="button"
+              onClick={() => setCodeOpen(true)}
+              className="mx-auto block text-center text-sm text-gray-400 underline-offset-2 transition-colors hover:text-white hover:underline"
+            >
+              Link not working? Enter the 6-digit code instead
+            </button>
+          ) : (
+          <form onSubmit={handleVerifyOtp} className="ec-expand space-y-3">
             <input
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -189,10 +237,8 @@ function LoginForm() {
                 {otpError}
               </p>
             )}
-            <p className="text-center text-xs text-gray-500">
-              Or tap the button in the email — either works.
-            </p>
           </form>
+          )}
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
