@@ -19,6 +19,7 @@ import {
   startBackgroundWatch,
   stopBackgroundWatch,
 } from "@/lib/native/backgroundLocation";
+import BackgroundLocationDisclosure from "@/components/BackgroundLocationDisclosure";
 
 // How long location sharing stays on. "arrive" auto-stops once you reach the
 // destination; the timed modes auto-stop after a fixed duration.
@@ -213,6 +214,29 @@ export default function EventDetailClient({
 
   // --- Map focus (tap a person to fly to their marker) -------------------
   const [focus, setFocus] = useState<MapFocus | null>(null);
+
+  // --- Background-location prominent disclosure (native shell only) ------
+  // Google Play requires an in-app disclosure with explicit accept BEFORE the
+  // OS background-location permission prompt. null = not yet loaded from
+  // storage (blocks both the dialog and the watcher for a tick), false = not
+  // yet accepted (dialog shows while sharing is on), true = accepted (persisted
+  // once, app-wide). Declining just flips sharing off — we ask again next time.
+  const [bgConsent, setBgConsent] = useState<boolean | null>(null);
+  useEffect(() => {
+    try {
+      setBgConsent(localStorage.getItem("yeta:bgloc-consent") === "granted");
+    } catch {
+      setBgConsent(false);
+    }
+  }, []);
+  const acceptBgDisclosure = useCallback(() => {
+    setBgConsent(true);
+    try {
+      localStorage.setItem("yeta:bgloc-consent", "granted");
+    } catch {
+      // storage blocked — consent holds for this session only
+    }
+  }, []);
 
   // The "You" controls section, so the mobile sticky bar can scroll to it.
   const youSectionRef = useRef<HTMLElement | null>(null);
@@ -469,6 +493,9 @@ export default function EventDetailClient({
 
     if (isNativePlatform()) {
       // Native shell: background watcher instead of the foreground interval.
+      // Blocked until the prominent disclosure below has been accepted (Play
+      // policy) — accepting flips bgConsent, which re-runs this effect.
+      if (bgConsent !== true) return;
       lastPingSentAtRef.current = 0;
       startBackgroundWatch((loc) => {
         if (cancelled) return;
@@ -517,7 +544,7 @@ export default function EventDetailClient({
       cancelled = true;
       clearInterval(t);
     };
-  }, [sharing, event.id]);
+  }, [sharing, event.id, bgConsent]);
 
   // --- Poll everyone's latest pings for the live map ---------------------
   useEffect(() => {
@@ -951,6 +978,12 @@ export default function EventDetailClient({
 
   return (
     <div className="space-y-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-0">
+      {sharing && bgConsent === false && isNativePlatform() && (
+        <BackgroundLocationDisclosure
+          onAccept={acceptBgDisclosure}
+          onDecline={() => saveRsvp({ shareLocation: false })}
+        />
+      )}
       <header>
         <Link
           href="/events"
