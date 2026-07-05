@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 // Native sign-in landing page. Supabase redirects the external browser here
@@ -8,36 +8,56 @@ import { useSearchParams } from "next/navigation";
 // the /** wildcard). Some browsers — Chrome on iOS in particular — silently
 // block server redirects into custom schemes like youreta://, so this page
 // attempts the hop automatically AND offers a tappable button (a user gesture
-// is always allowed to open the app). The app's DeepLinkAuthHandler then
-// exchanges the code in the WebView, where the PKCE verifier lives.
+// is always allowed to open the app).
+//
+// Two payload shapes are forwarded into the app:
+// - implicit flow (native sign-ins): tokens arrive in this page's URL
+//   fragment (#access_token=...&refresh_token=...) — passed through in the
+//   deep link's fragment; the app installs them with setSession().
+// - PKCE (legacy/edge cases): a ?code= query param — passed through as a
+//   query param; the app exchanges it.
 function NativeCallback() {
   const params = useSearchParams();
   const code = params.get("code") ?? "";
   const next = params.get("next") ?? "/events";
 
+  // The fragment never reaches the server, so read it client-side after mount.
+  const [fragment, setFragment] = useState("");
+  useEffect(() => {
+    setFragment(window.location.hash.replace(/^#/, ""));
+  }, []);
+  const hasTokens = fragment.includes("access_token=");
+
   const deepLink = useMemo(() => {
+    if (hasTokens) {
+      const frag = new URLSearchParams(fragment);
+      frag.set("next", next);
+      return `youreta://auth/callback#${frag.toString()}`;
+    }
     const qs = new URLSearchParams();
     if (code) qs.set("code", code);
     qs.set("next", next);
     return `youreta://auth/callback?${qs.toString()}`;
-  }, [code, next]);
+  }, [hasTokens, fragment, code, next]);
+
+  const ready = hasTokens || !!code;
 
   // Try the hop immediately — Safari honors this; Chrome needs the button.
   useEffect(() => {
-    if (!code) return;
+    if (!ready) return;
     const t = setTimeout(() => {
       window.location.href = deepLink;
     }, 150);
     return () => clearTimeout(t);
-  }, [code, deepLink]);
+  }, [ready, deepLink]);
 
-  if (!code) {
+  if (!ready) {
     return (
       <div className="mx-auto max-w-sm py-16 text-center">
         <h1 className="text-2xl font-bold tracking-tight">Link expired</h1>
         <p className="mt-2 text-sm text-gray-400">
-          This sign-in link is missing its code — request a new one from the
-          app.
+          This sign-in link is missing its credentials — request a new one from
+          the app.
         </p>
       </div>
     );
@@ -52,7 +72,10 @@ function NativeCallback() {
       <p className="mt-2 text-sm text-gray-400">
         One more tap to finish in the app.
       </p>
-      <a href={deepLink} className="btn btn-primary mt-8 min-h-12 w-full px-4 shadow-lg shadow-accent/20">
+      <a
+        href={deepLink}
+        className="btn btn-primary mt-8 min-h-12 w-full px-4 shadow-lg shadow-accent/20"
+      >
         Open Your ETA
       </a>
       <p className="mt-4 text-xs text-gray-500">

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, createImplicitClient } from "@/lib/supabase/client";
 import { OAUTH_ENABLED, GOOGLE_ENABLED, APPLE_ENABLED } from "@/lib/supabase/env";
 import {
   isNativePlatform,
@@ -131,7 +131,10 @@ function LoginForm() {
     setStatus("sending");
     setMessage("");
 
-    const supabase = createClient();
+    // Native uses the implicit flow: the emailed link returns tokens directly
+    // in the redirect fragment — no PKCE verifier to lose while the user is
+    // off in their mail app. Browsers keep the PKCE flow.
+    const supabase = isNativePlatform() ? createImplicitClient() : createClient();
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -142,8 +145,6 @@ function LoginForm() {
       setStatus("error");
       setMessage(error.message);
     } else {
-      // Guard the PKCE verifier against iOS webview cookie loss while the
-      // user is off in their mail app / browser.
       backupPkceVerifier();
       setStatus("sent");
     }
@@ -152,6 +153,27 @@ function LoginForm() {
   async function handleOAuth(provider: "google" | "apple") {
     setStatus("sending");
     setMessage("");
+
+    if (isNativePlatform()) {
+      // Implicit flow: tokens come back in the redirect fragment, no PKCE
+      // verifier to keep alive in webview storage. Navigate explicitly —
+      // Capacitor pushes the external URL to the system browser.
+      const supabase = createImplicitClient();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: getRedirectTo(), skipBrowserRedirect: true },
+      });
+      if (error || !data?.url) {
+        setStatus("error");
+        setMessage(error?.message ?? "Could not start sign-in.");
+        return;
+      }
+      window.location.href = data.url;
+      window.setTimeout(() => {
+        setStatus((prev) => (prev === "sending" ? "idle" : prev));
+      }, 3000);
+      return;
+    }
 
     const supabase = createClient();
 
@@ -165,8 +187,6 @@ function LoginForm() {
       setMessage(error.message);
       return;
     }
-    // Guard the PKCE verifier against iOS webview cookie loss while the user
-    // is off in the external browser.
     backupPkceVerifier();
     // On success the OAuth flow navigates away — in browsers this tab is
     // replaced; in the native shell the system browser opens on top and this

@@ -1,5 +1,26 @@
 import { createBrowserClient, type CookieOptions } from "@supabase/ssr";
+import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
+
+/**
+ * Throwaway client used ONLY to initiate sign-in from the native shell, with
+ * the implicit flow: Supabase returns the session tokens directly in the
+ * redirect's URL fragment — no PKCE verifier, so nothing has to survive in
+ * webview storage while the user is off in the external browser (iOS drops
+ * freshly written cookies in that window; see createClient below). The app
+ * receives the tokens via the youreta:// deep link and installs them with
+ * setSession() on the normal cookie-backed client.
+ */
+export function createImplicitClient() {
+  return createSupabaseJsClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      flowType: "implicit",
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
 
 // Browser-side Supabase client for use inside `'use client'` components.
 //

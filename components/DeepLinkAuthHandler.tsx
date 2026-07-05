@@ -39,27 +39,42 @@ export function DeepLinkAuthHandler() {
       const parsed = parseAuthCallbackUrl(url);
       if (!parsed) return; // not an auth deep link; ignore
 
-      const { code, next } = parsed;
-      if (!code) {
+      const { code, next, accessToken, refreshToken } = parsed;
+      const dedupeKey = accessToken ?? code;
+      if (!dedupeKey) {
         setStatus("error");
-        setDetail("The sign-in link was missing its code. Try again.");
+        setDetail("The sign-in link was missing its credentials. Try again.");
         return;
       }
-      if (handledCodes.has(code)) return;
-      handledCodes.add(code);
+      if (handledCodes.has(dedupeKey)) return;
+      handledCodes.add(dedupeKey);
 
       setStatus("working");
       setDetail("");
       try {
-        // iOS may have dropped the verifier cookie while the app was
-        // backgrounded; restore it from the localStorage backup first.
-        restorePkceVerifier();
         const supabase = createClient();
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setStatus("error");
-          setDetail(error.message);
-          return;
+        if (accessToken && refreshToken) {
+          // Implicit-flow handoff: install the session directly — no PKCE
+          // verifier involved, nothing to have survived in webview storage.
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) {
+            setStatus("error");
+            setDetail(error.message);
+            return;
+          }
+        } else {
+          // PKCE fallback: restore the verifier cookie if iOS dropped it,
+          // then exchange the code.
+          restorePkceVerifier();
+          const { error } = await supabase.auth.exchangeCodeForSession(code!);
+          if (error) {
+            setStatus("error");
+            setDetail(error.message);
+            return;
+          }
         }
         clearPkceBackup();
         // Only allow internal redirects: a single leading slash, never
@@ -121,31 +136,34 @@ export function DeepLinkAuthHandler() {
   );
 }
 
-function parseAuthCallbackUrl(
-  url: string
-): { code: string | null; next: string | null } | null {
-  // Expected shape: youreta://auth/callback?code=...&next=...
+function parseAuthCallbackUrl(url: string): {
+  code: string | null;
+  next: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+} | null {
+  // Expected shapes:
+  //   youreta://auth/callback?code=...&next=...                      (PKCE)
+  //   youreta://auth/callback#access_token=...&refresh_token=...&next=...
   if (!url.startsWith("youreta://")) return null;
+  const withoutScheme = url.slice("youreta://".length);
+  if (!withoutScheme.startsWith("auth/callback")) return null;
 
-  try {
-    // Custom schemes parse fine with the WHATWG URL parser; the host+path of
-    // "youreta://auth/callback" come through as host "auth", path "/callback".
-    const u = new URL(url);
-    const isAuthCallback =
-      `${u.host}${u.pathname}` === "auth/callback" ||
-      u.pathname === "//auth/callback";
-    if (!isAuthCallback) return null;
-    return {
-      code: u.searchParams.get("code"),
-      next: u.searchParams.get("next"),
-    };
-  } catch {
-    // Fallback: manual parsing in case URL() rejects the custom scheme.
-    const withoutScheme = url.slice("youreta://".length);
-    if (!withoutScheme.startsWith("auth/callback")) return null;
-    const queryIndex = url.indexOf("?");
-    if (queryIndex === -1) return { code: null, next: null };
-    const params = new URLSearchParams(url.slice(queryIndex + 1));
-    return { code: params.get("code"), next: params.get("next") };
-  }
+  const hashIndex = url.indexOf("#");
+  const queryIndex = url.indexOf("?");
+  const fragment =
+    hashIndex !== -1 ? new URLSearchParams(url.slice(hashIndex + 1)) : null;
+  const query =
+    queryIndex !== -1 && (hashIndex === -1 || queryIndex < hashIndex)
+      ? new URLSearchParams(
+          url.slice(queryIndex + 1, hashIndex === -1 ? undefined : hashIndex)
+        )
+      : null;
+
+  return {
+    code: query?.get("code") ?? null,
+    next: fragment?.get("next") ?? query?.get("next") ?? null,
+    accessToken: fragment?.get("access_token") ?? null,
+    refreshToken: fragment?.get("refresh_token") ?? null,
+  };
 }
