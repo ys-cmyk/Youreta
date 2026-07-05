@@ -31,6 +31,52 @@ type AppPlugin = {
 
 const noop = () => {};
 
+// --- PKCE verifier belt-and-braces (native shell) ---------------------------
+// @supabase/ssr keeps the PKCE code_verifier in a cookie, but iOS WKWebView
+// flushes cookies to disk lazily — if the app is backgrounded/killed while the
+// user signs in via the external browser, the freshly written verifier cookie
+// can be lost, and the code exchange fails with "verifier not found". Back the
+// verifier cookie(s) up to localStorage (flushed far more eagerly) right after
+// initiating sign-in, and restore them just before the exchange.
+const PKCE_BACKUP_KEY = "yeta:pkce-backup";
+
+export function backupPkceVerifier(): void {
+  try {
+    if (!isNativePlatform()) return;
+    const entries = document.cookie
+      .split("; ")
+      .filter((c) => c.includes("code-verifier"));
+    if (entries.length) {
+      localStorage.setItem(PKCE_BACKUP_KEY, JSON.stringify(entries));
+    }
+  } catch {
+    // best effort only
+  }
+}
+
+/** Restore the verifier cookie from backup if it's gone. True if present. */
+export function restorePkceVerifier(): boolean {
+  try {
+    if (document.cookie.includes("code-verifier")) return true;
+    const raw = localStorage.getItem(PKCE_BACKUP_KEY);
+    if (!raw) return false;
+    for (const entry of JSON.parse(raw) as string[]) {
+      document.cookie = `${entry}; path=/; max-age=600; SameSite=Lax; Secure`;
+    }
+    return document.cookie.includes("code-verifier");
+  } catch {
+    return false;
+  }
+}
+
+export function clearPkceBackup(): void {
+  try {
+    localStorage.removeItem(PKCE_BACKUP_KEY);
+  } catch {
+    // nothing to surface
+  }
+}
+
 /**
  * True when the native shell can actually receive youreta:// deep links —
  * i.e. the @capacitor/app plugin is registered in this build. When a build

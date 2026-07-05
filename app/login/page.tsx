@@ -4,7 +4,11 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { OAUTH_ENABLED, GOOGLE_ENABLED, APPLE_ENABLED } from "@/lib/supabase/env";
-import { isNativePlatform, isDeepLinkCapable } from "@/lib/native/deepLinkAuth";
+import {
+  isNativePlatform,
+  isDeepLinkCapable,
+  backupPkceVerifier,
+} from "@/lib/native/deepLinkAuth";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -138,6 +142,9 @@ function LoginForm() {
       setStatus("error");
       setMessage(error.message);
     } else {
+      // Guard the PKCE verifier against iOS webview cookie loss while the
+      // user is off in their mail app / browser.
+      backupPkceVerifier();
       setStatus("sent");
     }
   }
@@ -158,6 +165,9 @@ function LoginForm() {
       setMessage(error.message);
       return;
     }
+    // Guard the PKCE verifier against iOS webview cookie loss while the user
+    // is off in the external browser.
+    backupPkceVerifier();
     // On success the OAuth flow navigates away — in browsers this tab is
     // replaced; in the native shell the system browser opens on top and this
     // page keeps running. Reset shortly after the hand-off so the buttons are

@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { isNativePlatform, onAppUrlOpen } from "@/lib/native/deepLinkAuth";
+import {
+  isNativePlatform,
+  onAppUrlOpen,
+  restorePkceVerifier,
+  clearPkceBackup,
+} from "@/lib/native/deepLinkAuth";
 
 // Completes the auth flow inside the native shell. OAuth / magic-link
 // verification happens in the external browser, which then lands on
@@ -46,6 +51,9 @@ export function DeepLinkAuthHandler() {
       setStatus("working");
       setDetail("");
       try {
+        // iOS may have dropped the verifier cookie while the app was
+        // backgrounded; restore it from the localStorage backup first.
+        restorePkceVerifier();
         const supabase = createClient();
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
@@ -53,6 +61,7 @@ export function DeepLinkAuthHandler() {
           setDetail(error.message);
           return;
         }
+        clearPkceBackup();
         // Only allow internal redirects: a single leading slash, never
         // "//host", so a crafted next can't bounce the user to another site.
         // Full page navigation (not router.push) so the middleware sees the
