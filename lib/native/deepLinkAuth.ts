@@ -28,6 +28,7 @@ type AppPlugin = {
 type CapacitorGlobal = {
   isNativePlatform?: () => boolean;
   registerPlugin?: (name: string) => unknown;
+  isPluginAvailable?: (name: string) => boolean;
 };
 
 function getCapacitor(): CapacitorGlobal | undefined {
@@ -36,6 +37,27 @@ function getCapacitor(): CapacitorGlobal | undefined {
 }
 
 const noop = () => {};
+
+/**
+ * True when the native shell can actually receive youreta:// deep links —
+ * i.e. the @capacitor/app plugin is registered in this build. When a build
+ * predates the plugin (or `npx cap sync ios` wasn't run), OAuth can never
+ * complete in-app; callers use this to steer users to code sign-in instead.
+ * Always false in plain browsers.
+ */
+export function isDeepLinkCapable(): boolean {
+  try {
+    const cap = getCapacitor();
+    if (!isNativePlatform()) return false;
+    if (typeof cap?.isPluginAvailable === "function") {
+      return cap.isPluginAvailable("App");
+    }
+    // Older bridge without isPluginAvailable: assume capable.
+    return typeof cap?.registerPlugin === "function";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Subscribe to the native `appUrlOpen` event (fired when the OS opens the app

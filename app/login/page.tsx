@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { OAUTH_ENABLED, GOOGLE_ENABLED, APPLE_ENABLED } from "@/lib/supabase/env";
-import { isNativePlatform } from "@/lib/native/deepLinkAuth";
+import { isNativePlatform, isDeepLinkCapable } from "@/lib/native/deepLinkAuth";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -19,6 +19,16 @@ function LoginForm() {
   const [otp, setOtp] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [otpError, setOtpError] = useState("");
+
+  // In the native shell, OAuth can only complete if this build can receive
+  // youreta:// deep links. If it can't (plugin missing from the build), hide
+  // the provider buttons rather than offering a sign-in that dead-ends, and
+  // steer to the email code instead. Evaluated after mount: window.Capacitor
+  // is a runtime global.
+  const [oauthUsable, setOauthUsable] = useState(true);
+  useEffect(() => {
+    if (isNativePlatform() && !isDeepLinkCapable()) setOauthUsable(false);
+  }, []);
 
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -208,7 +218,13 @@ function LoginForm() {
             </p>
           )}
 
-          {OAUTH_ENABLED && (
+          {OAUTH_ENABLED && !oauthUsable && (
+            <p className="pt-2 text-center text-xs text-gray-500">
+              Google sign-in needs the latest app version — use the email code
+              above for now.
+            </p>
+          )}
+          {OAUTH_ENABLED && oauthUsable && (
           <>
           <div className="flex items-center gap-3 pt-2">
             <span className="h-px flex-1 bg-white/10" />
