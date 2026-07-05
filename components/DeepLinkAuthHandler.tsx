@@ -20,10 +20,32 @@ import {
 // `exchangeCodeForSession(code)` succeeds here in-app even though the code was
 // minted via the external browser.
 //
-// Deep links can arrive twice for one sign-in (getLaunchUrl on cold start +
-// the appUrlOpen event), so codes are deduped. Progress and failure are shown
-// in a small toast — a silent failure looks like "nothing happened".
+// Deep links can arrive REPEATEDLY for one sign-in: getLaunchUrl returns the
+// same launch URL on every page load for the app process's lifetime, and
+// completing sign-in itself navigates (a page load) — so an in-memory dedupe
+// alone loops forever (sign in → navigate → re-read launch URL → repeat).
+// Dedupe must survive page loads: persist the last-handled key.
 const handledCodes = new Set<string>();
+const HANDLED_KEY = "yeta:auth-handled";
+
+function alreadyHandled(key: string): boolean {
+  if (handledCodes.has(key)) return true;
+  try {
+    if (localStorage.getItem(HANDLED_KEY) === key) return true;
+  } catch {
+    // storage unavailable — in-memory dedupe still applies
+  }
+  return false;
+}
+
+function markHandled(key: string): void {
+  handledCodes.add(key);
+  try {
+    localStorage.setItem(HANDLED_KEY, key);
+  } catch {
+    // best effort
+  }
+}
 
 export function DeepLinkAuthHandler() {
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
@@ -46,8 +68,10 @@ export function DeepLinkAuthHandler() {
         setDetail("The sign-in link was missing its credentials. Try again.");
         return;
       }
-      if (handledCodes.has(dedupeKey)) return;
-      handledCodes.add(dedupeKey);
+      if (alreadyHandled(dedupeKey)) return;
+      // Mark BEFORE processing so even a failure can't re-fire in a loop; the
+      // user retries by starting a fresh sign-in (which mints a new key).
+      markHandled(dedupeKey);
 
       setStatus("working");
       setDetail("");
@@ -77,6 +101,10 @@ export function DeepLinkAuthHandler() {
           }
         }
         clearPkceBackup();
+        // CapacitorCookies applies cookie writes through native storage
+        // asynchronously; give the fresh session cookies a beat to land so
+        // the middleware sees them on the very next request.
+        await new Promise((r) => setTimeout(r, 400));
         // Only allow internal redirects: a single leading slash, never
         // "//host", so a crafted next can't bounce the user to another site.
         // Full page navigation (not router.push) so the middleware sees the
