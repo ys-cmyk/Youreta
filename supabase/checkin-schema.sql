@@ -303,3 +303,19 @@ begin
   );
 end
 $do$;
+
+-- ============================================================================
+-- Fix: INSERT ... RETURNING blocked by the hardened read policies
+-- (mirror of supabase/migrations/20260705120000_rls_returning_fix.sql)
+-- Row-own-column checks come first so a new row's RETURNING read-back passes;
+-- ec_is_event_member() still grants co-participant visibility.
+-- ============================================================================
+drop policy if exists ec_events_read on public.ec_events;
+create policy ec_events_read on public.ec_events
+  for select to authenticated
+  using (host_id = auth.uid() or public.ec_is_event_member(id));
+
+drop policy if exists ec_rsvps_read on public.ec_rsvps;
+create policy ec_rsvps_read on public.ec_rsvps
+  for select to authenticated
+  using (user_id = auth.uid() or public.ec_is_event_member(event_id));

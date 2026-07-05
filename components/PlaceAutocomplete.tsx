@@ -57,13 +57,49 @@ export default function PlaceAutocomplete({
   const skipNextSearch = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
+  // Bias results toward the user's location (Google-Maps-style: "Chipotle"
+  // should surface the one near you, not one three states over). Photon takes
+  // lat/lon ranking hints. Only read the position if permission was ALREADY
+  // granted — searching for an address must never spring a permission prompt.
+  const biasRef = useRef<{ lat: number; lon: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!("geolocation" in navigator)) return;
+        if ("permissions" in navigator) {
+          const status = await navigator.permissions.query({
+            name: "geolocation" as PermissionName,
+          });
+          if (status.state !== "granted") return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (cancelled) return;
+            biasRef.current = {
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+            };
+          },
+          () => {},
+          { enableHighAccuracy: false, timeout: 5000, maximumAge: 300_000 }
+        );
+      } catch {
+        // Bias is best-effort only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (skipNextSearch.current) {
       skipNextSearch.current = false;
       return;
     }
     const q = query.trim();
-    if (q.length < 3) {
+    if (q.length < 2) {
       setResults([]);
       setOpen(false);
       return;
@@ -73,8 +109,12 @@ export default function PlaceAutocomplete({
     const t = setTimeout(async () => {
       setLoading(true);
       try {
+        const bias = biasRef.current;
+        const biasParams = bias
+          ? `&lat=${bias.lat.toFixed(4)}&lon=${bias.lon.toFixed(4)}`
+          : "";
         const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5`,
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6${biasParams}`,
           { signal: controller.signal }
         );
         if (!res.ok) throw new Error("geocoder error");
@@ -91,7 +131,7 @@ export default function PlaceAutocomplete({
       } finally {
         setLoading(false);
       }
-    }, 350);
+    }, 250);
 
     return () => {
       clearTimeout(t);
