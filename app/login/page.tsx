@@ -26,7 +26,8 @@ function LoginForm() {
   // Hidden diagnostics: triple-tap the brand mark to see how the native bridge
   // exposes plugins in this build. Harmless in browsers.
   const [diagTaps, setDiagTaps] = useState(0);
-  const showDiag = diagTaps >= 3;
+  // Also reachable without tapping: /login?debug=1
+  const showDiag = diagTaps >= 3 || params.get("debug") === "1";
   function diagInfo(): string {
     try {
       const cap = (window as unknown as { Capacitor?: Record<string, unknown> })
@@ -175,12 +176,14 @@ function LoginForm() {
       />
 
       <div className="text-center">
-        <div
+        <button
+          type="button"
+          aria-label="Your ETA"
           onClick={() => setDiagTaps((n) => n + 1)}
-          className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-bright to-accent text-2xl text-white shadow-lg shadow-accent/30"
+          className="mx-auto mb-5 flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-br from-accent-bright to-accent text-2xl text-white shadow-lg shadow-accent/30"
         >
           ◎
-        </div>
+        </button>
         {showDiag && (
           <pre className="mx-auto mt-2 max-w-full overflow-x-auto rounded-lg border border-white/10 bg-black/40 p-2 text-left text-[10px] text-gray-400">
             {diagInfo()}
