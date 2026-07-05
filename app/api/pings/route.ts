@@ -46,6 +46,19 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Belt-and-braces retention: prune this user's own pings older than 24h for
+  // this event (allowed by the "delete own pings" RLS policy; one indexed
+  // delete). The primary purge is the daily pg_cron job — and either way a
+  // failure here must never fail the ping itself, so the error is ignored.
+  const purgeCutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  await supabase
+    .from("ec_location_pings")
+    .delete()
+    .eq("event_id", eventId)
+    .eq("user_id", user.id)
+    .lt("created_at", purgeCutoff);
+
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 

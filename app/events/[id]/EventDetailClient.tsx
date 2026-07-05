@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import type { EventRow, LocationPing, Participant, Rsvp } from "@/lib/types";
 import { distanceMeters, formatDistance } from "@/lib/geo";
 import {
@@ -127,6 +128,7 @@ export default function EventDetailClient({
   initialMyRsvp: Rsvp | null;
 }) {
   const destination = { lat: event.lat, lng: event.lng };
+  const router = useRouter();
 
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [myRsvp, setMyRsvp] = useState<Rsvp | null>(initialMyRsvp);
@@ -267,6 +269,7 @@ export default function EventDetailClient({
   // --- Save participation (join / update eta / toggle sharing) -----------
   const saveRsvp = useCallback(
     async (next: { eta?: string | null; shareLocation?: boolean }) => {
+      const wasJoined = myRsvp !== null;
       const eta = next.eta !== undefined ? next.eta : myRsvp?.eta ?? null;
       const shareLocation = next.shareLocation ?? myRsvp?.share_location ?? false;
 
@@ -291,10 +294,30 @@ export default function EventDetailClient({
           }
           return [...prev, { rsvp, name: "You", lastPing: null }];
         });
+        // Joining is what makes co-participants visible (reads are
+        // members-only): re-run the server component so the full participant
+        // list arrives without a manual reload.
+        if (!wasJoined) router.refresh();
       }
     },
-    [event.id, myRsvp, currentUserId]
+    [event.id, myRsvp, currentUserId, router]
   );
+
+  // After a router.refresh() (e.g. right after auto-join), fold the freshly
+  // fetched server participant list into state. My own row keeps its local
+  // rsvp (state is the source of truth for my in-flight edits); rows the
+  // server doesn't know about yet are preserved.
+  useEffect(() => {
+    setParticipants((prev) => {
+      const mine = prev.find((p) => p.rsvp.user_id === currentUserId);
+      const merged = initialParticipants.map((p) =>
+        mine && p.rsvp.user_id === currentUserId ? { ...p, rsvp: mine.rsvp } : p
+      );
+      const known = new Set(initialParticipants.map((p) => p.rsvp.user_id));
+      const extras = prev.filter((p) => !known.has(p.rsvp.user_id));
+      return [...merged, ...extras];
+    });
+  }, [initialParticipants, currentUserId]);
 
   // Opening an invite link makes you a participant automatically, so the
   // destination is shared to your account (it shows in your Destinations list)

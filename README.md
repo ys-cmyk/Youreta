@@ -131,6 +131,33 @@ https://<project-ref>.supabase.co/auth/v1/callback
   Google Places later by replacing the fetch in `components/PlaceAutocomplete.tsx`
   (and adding the Google endpoint to `connect-src` in `next.config.ts`).
 
+## Privacy & data retention
+
+- **Who can see what — the link is the invite.** Destination details
+  (title, address, coordinates), the participant list, ETAs, and live
+  locations are visible **only to that destination's participants** (the host
+  and everyone who joined). Signed-in users cannot enumerate or dump other
+  people's destinations or ETAs: the row-level-security read policies on
+  `ec_events` / `ec_rsvps` are member-scoped, and a `security definer` RPC
+  (`ec_get_event`) lets a signed-in holder of a destination's unguessable
+  link UUID fetch exactly that one destination so they can join. Opening the
+  link auto-joins you, which is what grants visibility.
+- **Location pings are auto-purged after 24 hours.** A daily `pg_cron` job
+  (`ec-purge-old-pings`, 04:00 UTC) deletes pings older than 24 h, and the
+  app additionally prunes your own stale pings each time you post a new one.
+  Users can also delete their own pings at any time (RLS delete policy). The
+  live map only ever uses the last 15 minutes.
+- **Applying the hardening migration**: paste
+  [`supabase/migrations/20260705031208_security_hardening.sql`](./supabase/migrations/20260705031208_security_hardening.sql)
+  into the Supabase **SQL Editor** and run it (it's idempotent; the same
+  block is also appended to
+  [`supabase/checkin-schema.sql`](./supabase/checkin-schema.sql)), or let the
+  Supabase **GitHub integration** apply it from `supabase/migrations/` when
+  the branch lands. If the final `pg_cron` section errors because the
+  extension isn't enabled, everything above it is already applied — enable
+  pg_cron (Dashboard → Database → Extensions) and re-run that section, or
+  rely on the app-side purge.
+
 ## Native apps (Capacitor)
 
 The repo is scaffolded so you can build native iOS/Android **shell** apps that

@@ -21,9 +21,16 @@ export default async function EventDetailPage({
   // Fetch everything in one parallel round-trip. Pings are bounded to the live
   // window (the client's poll uses the same cutoff) — without the filter this
   // query grows unboundedly as people share.
+  //
+  // The event comes via the ec_get_event RPC rather than a table select: the
+  // ec_events select policy is members-only, but "the link is the key" — any
+  // signed-in holder of the unguessable UUID may load this one event. For a
+  // not-yet-member the rsvps/pings queries legitimately return empty; the
+  // client then auto-joins and refreshes, at which point they're a member and
+  // both fill in.
   const pingCutoff = new Date(Date.now() - 15 * 60_000).toISOString();
   const [{ data: event }, { data: rsvps }, { data: pings }] = await Promise.all([
-    supabase.from("ec_events").select("*").eq("id", id).maybeSingle<EventRow>(),
+    supabase.rpc("ec_get_event", { eid: id }).maybeSingle<EventRow>(),
     supabase.from("ec_rsvps").select("*").eq("event_id", id).returns<Rsvp[]>(),
     supabase
       .from("ec_location_pings")
