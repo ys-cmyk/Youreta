@@ -12,6 +12,7 @@
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",
     "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
     "@capacitor/core": "^8.4.0",
     "@capacitor/geolocation": "^8.2.0",
     "@supabase/ssr": "^0.7.0",

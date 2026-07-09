@@ -9,6 +9,7 @@ import {
   isNativePlatform,
   isDeepLinkCapable,
   backupPkceVerifier,
+  openInAppBrowser,
 } from "@/lib/native/deepLinkAuth";
 
 function LoginForm() {
@@ -179,8 +180,7 @@ function LoginForm() {
 
     if (isNativePlatform()) {
       // Implicit flow: tokens come back in the redirect fragment, no PKCE
-      // verifier to keep alive in webview storage. Navigate explicitly —
-      // Capacitor pushes the external URL to the system browser.
+      // verifier to keep alive in webview storage.
       const supabase = createImplicitClient();
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -191,7 +191,13 @@ function LoginForm() {
         setMessage(error?.message ?? "Could not start sign-in.");
         return;
       }
-      window.location.href = data.url;
+      // App Store Guideline 4: present sign-in in the IN-APP browser
+      // (SFSafariViewController) rather than handing off to external Safari.
+      // DeepLinkAuthHandler dismisses it when the youreta:// deep link returns.
+      // Fall back to a plain navigation on builds without the Browser plugin
+      // (older shells / plain browsers), preserving the previous behavior.
+      const opened = await openInAppBrowser(data.url);
+      if (!opened) window.location.href = data.url;
       window.setTimeout(() => {
         setStatus((prev) => (prev === "sending" ? "idle" : prev));
       }, 3000);

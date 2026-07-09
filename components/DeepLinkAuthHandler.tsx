@@ -7,6 +7,7 @@ import {
   onAppUrlOpen,
   restorePkceVerifier,
   clearPkceBackup,
+  closeInAppBrowser,
 } from "@/lib/native/deepLinkAuth";
 
 // Completes the auth flow inside the native shell. OAuth / magic-link
@@ -61,6 +62,12 @@ export function DeepLinkAuthHandler() {
       const parsed = parseAuthCallbackUrl(url);
       if (!parsed) return; // not an auth deep link; ignore
 
+      // The deep link means sign-in finished in the in-app browser
+      // (SFSafariViewController). Dismiss it now, best-effort, so the user
+      // watches the "Finishing sign-in…" toast in the app itself rather than
+      // behind the Safari sheet. No-op if it wasn't opened via the plugin.
+      void closeInAppBrowser();
+
       const { code, next, accessToken, refreshToken } = parsed;
       const dedupeKey = accessToken ?? code;
       if (!dedupeKey) {
@@ -113,6 +120,9 @@ export function DeepLinkAuthHandler() {
           next && next.startsWith("/") && !next.startsWith("//")
             ? next
             : "/events";
+        // Ensure the in-app browser sheet is gone before we navigate
+        // (harmless if it was already closed above).
+        void closeInAppBrowser();
         window.location.assign(safeNext);
       } catch (e) {
         setStatus("error");

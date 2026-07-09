@@ -29,6 +29,18 @@ type AppPlugin = {
   getLaunchUrl?: () => Promise<{ url?: string } | null | undefined>;
 };
 
+// @capacitor/browser — opens web content in an in-app browser
+// (SFSafariViewController on iOS / Custom Tabs on Android) instead of handing
+// off to the external system browser. Required for App Store Guideline 4:
+// sign-in must stay inside the app, not bounce to Safari.
+type BrowserPlugin = {
+  open(options: {
+    url: string;
+    presentationStyle?: "fullscreen" | "popover";
+  }): Promise<void>;
+  close(): Promise<void>;
+};
+
 const noop = () => {};
 
 // --- PKCE verifier belt-and-braces (native shell) ---------------------------
@@ -95,6 +107,38 @@ export function isDeepLinkCapable(): boolean {
     return getCapacitor()?.isPluginAvailable?.("App") === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Present a URL in the in-app browser (SFSafariViewController on iOS / Custom
+ * Tabs on Android) via @capacitor/browser, keeping sign-in inside the app
+ * (App Store Guideline 4). Returns true when the plugin call was made, false
+ * when the plugin isn't available in this build (plain browsers / older native
+ * shells) — the caller then falls back to a plain navigation. Never throws.
+ */
+export async function openInAppBrowser(url: string): Promise<boolean> {
+  try {
+    const browser = getNativePlugin<BrowserPlugin>("Browser");
+    if (typeof browser?.open !== "function") return false;
+    await browser.open({ url, presentationStyle: "fullscreen" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Dismiss the in-app browser opened by `openInAppBrowser`. Fully guarded:
+ * safe to call when nothing is open, and on Android `close()` may reject —
+ * that's swallowed. Never throws.
+ */
+export async function closeInAppBrowser(): Promise<void> {
+  try {
+    const browser = getNativePlugin<BrowserPlugin>("Browser");
+    await browser?.close?.();
+  } catch {
+    // best-effort dismissal; nothing to surface
   }
 }
 

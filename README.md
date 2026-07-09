@@ -286,20 +286,30 @@ Notes:
   packages — the bridge is accessed via the runtime-injected `window.Capacitor`
   global — so in plain browsers/PWA nothing changes: location sharing stays
   foreground-only (the tab must be open), exactly as before.
-- **(c) Native sign-in uses a `youreta://` deep link.** Inside the native shell,
-  OAuth and magic-link verification happen in the external browser (Safari),
-  which can't set cookies in the app's WebView. So on native the login page
-  sends `youreta://auth/callback?next=…` as the auth redirect instead of the
-  https callback; iOS bounces that deep link back into the app (the scheme is
-  registered via `CFBundleURLTypes` in `ios/App/App/Info.plist`), where
-  `components/DeepLinkAuthHandler.tsx` receives it through the
+- **(c) Native sign-in uses an in-app browser + a `youreta://` deep link.**
+  Inside the native shell, OAuth (and magic-link) verification happens on the
+  provider's web pages, which can't set cookies in the app's WebView. To satisfy
+  App Store **Guideline 4** (sign-in must not hand off to the external Safari),
+  the login page presents that web content in an **in-app browser**
+  (SFSafariViewController on iOS / Custom Tabs on Android) via the
+  [`@capacitor/browser`](https://capacitorjs.com/docs/apis/browser) plugin
+  (`openInAppBrowser` in `lib/native/deepLinkAuth.ts`), rather than pushing the
+  URL to the system browser. The auth redirect is `youreta://auth/callback?next=…`
+  instead of the https callback; iOS bounces that deep link back into the app
+  (the scheme is registered via `CFBundleURLTypes` in `ios/App/App/Info.plist`),
+  where `components/DeepLinkAuthHandler.tsx` receives it through the
   [`@capacitor/app`](https://capacitorjs.com/docs/apis/app) plugin's
-  `appUrlOpen` event (bridged plugin-free in `lib/native/deepLinkAuth.ts`) and
-  exchanges the code for a session in the WebView. After pulling this change:
+  `appUrlOpen` event (bridged plugin-free in `lib/native/deepLinkAuth.ts`),
+  **dismisses the in-app browser** (`closeInAppBrowser`), and exchanges the code
+  for a session in the WebView. On builds without the Browser plugin the login
+  page falls back to a plain navigation (the previous behavior). The emailed
+  magic link still opens from the mail app, and the 6-digit code path is fully
+  in-app. After pulling this change:
 
-  1. `npm install` (picks up the new `@capacitor/app` dependency), then
-     `npx cap sync ios` so the plugin's native code is wired into the iOS
-     project, then rebuild the app in Xcode.
+  1. `npm install` (picks up the new `@capacitor/app` and `@capacitor/browser`
+     dependencies), then `npx cap sync ios` (and `npx cap sync android`) so the
+     plugins' native code is wired into the native projects, then rebuild the
+     app in Xcode (and Android Studio).
   2. In the **Supabase dashboard** → **Authentication** → **URL Configuration**
      → **Redirect URLs**, add `youreta://auth/callback` (already added to
      `additional_redirect_urls` in `supabase/config.toml` for local dev).
