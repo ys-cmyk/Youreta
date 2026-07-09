@@ -92,7 +92,10 @@ function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: token }),
       });
-      if (res.ok) {
+      // Require a genuine { ok: true } JSON body — a redirect that resolved to
+      // an HTML page would also be res.ok, and must not count as success.
+      const json = res.ok ? await res.json().catch(() => null) : null;
+      if (json?.ok === true) {
         setVerifying(false);
         window.location.assign(safeNext);
         return;

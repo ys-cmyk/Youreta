@@ -13,6 +13,9 @@ const PUBLIC_PREFIXES = [
   "/manifest.webmanifest",
   "/apple-icon",
   "/icon",
+  // Reviewer demo sign-in: must be reachable signed-out (it IS the sign-in);
+  // the route does its own strict gating via env-configured credentials.
+  "/api/review-login",
 ];
 
 export async function updateSession(request: NextRequest) {
