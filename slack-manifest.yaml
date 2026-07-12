@@ -1,0 +1,37 @@
+# Slack app manifest for the "Your ETA" single-workspace integration.
+# Create the app from this file at https://api.slack.com/apps → Create New App →
+# From a manifest. See the "Slack integration" section of README.md for the full
+# owner setup (deploy the code BEFORE applying this manifest — Slack verifies the
+# events request URL live).
+display_information:
+  name: Your ETA
+  description: Share a destination and watch everyone's live ETA converge.
+features:
+  bot_user:
+    display_name: youreta
+    always_online: true
+  slash_commands:
+    - command: /eta
+      url: https://youreta.app/api/slack/command
+      description: Create a shared destination and post the join link
+      usage_hint: "[place or address]"
+      should_escape: false
+  unfurl_domains:
+    - youreta.app
+oauth_config:
+  scopes:
+    bot:
+      - commands
+      - links:read
+      - links:write
+      - chat:write
+settings:
+  event_subscriptions:
+    request_url: https://youreta.app/api/slack/events
+    bot_events:
+      - link_shared
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

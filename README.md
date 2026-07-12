@@ -208,6 +208,60 @@ sign in once as `REVIEW_EMAIL`, create a destination (set an address), and share
 your live location, so the reviewer lands on a populated destination instead of
 an empty state.
 
+## Slack integration (single workspace)
+
+Teams already ask "when's everyone getting there?" in Slack, and the app's
+link-is-the-invite model fits a channel perfectly. This is a **single-workspace**
+integration (no OAuth flow, no Slack Marketplace review) with two features:
+
+- **`/eta <place>` slash command** — geocodes the place, creates a destination,
+  and posts an in-channel card with an **Open Your ETA** button (the join link).
+- **Link unfurling** — pasting a `https://youreta.app/events/<uuid>` link renders
+  a live snapshot card: how many people have joined and the soonest arrival ETA.
+
+Location sharing keeps happening on phones via the existing web/app flow —
+unchanged. Slack is a front door only.
+
+Both endpoints are **entirely server-side** and **off by default**: without the
+required env vars they return **404** (the integration does not exist). Slack
+signs the raw request body; the routes verify the `v0=` HMAC-SHA256 signature and
+the `±5 min` timestamp before doing anything. Set these **in Vercel** (Project →
+Settings → Environment Variables) — they must **NEVER** be prefixed
+`NEXT_PUBLIC`:
+
+| Env var | Required? | Value |
+| --- | --- | --- |
+| `SLACK_SIGNING_SECRET` | **Yes** | Slack app **Basic Information → Signing Secret**. Endpoints 404 without it. |
+| `SLACK_BOT_TOKEN` | **Yes** | Bot User OAuth token (`xoxb-…`) from **Install App**. Endpoints 404 without it. |
+| `SLACK_BOT_HOST_EMAIL` | Optional | Email for the service account that hosts slash-created destinations (default `slack-bot@youreta.app`). |
+| `SLACK_TEAM_ID` | Optional | Pin the integration to one workspace: commands from other teams get a `401`. |
+
+It reuses the existing `SUPABASE_SECRET_KEY` (service-role) for the bot host
+account and the stateless unfurl reads.
+
+### Owner setup
+
+Because Slack verifies the Events request URL **live** when you apply the
+manifest, **deploy this code first**, then:
+
+1. **Create the app from the manifest.** [api.slack.com/apps](https://api.slack.com/apps)
+   → **Create New App → From a manifest** → paste
+   [`slack-manifest.yaml`](./slack-manifest.yaml).
+2. **Copy the signing secret.** Basic Information → **Signing Secret** → set
+   Vercel `SLACK_SIGNING_SECRET`.
+3. **Install + copy the bot token.** Install App → to Workspace → copy the
+   **Bot User OAuth Token** (`xoxb-…`) → set Vercel `SLACK_BOT_TOKEN`.
+4. **Redeploy** so the env vars take effect, and confirm the Event Subscriptions
+   request URL shows **Verified**.
+
+### Known tradeoff
+
+Slack-created destinations are hosted by the **bot service account**, not by the
+Slack user who ran `/eta`. Because the app's row-level security is host-only,
+those destinations **can't be edited or deleted from the app UI**. A future
+"claim destination" feature would let a signed-in user take ownership; it's out
+of scope for this MVP.
+
 ## Native apps (Capacitor)
 
 The repo is scaffolded so you can build native iOS/Android **shell** apps that

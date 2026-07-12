@@ -16,6 +16,9 @@ const PUBLIC_PREFIXES = [
   // Reviewer demo sign-in: must be reachable signed-out (it IS the sign-in);
   // the route does its own strict gating via env-configured credentials.
   "/api/review-login",
+  // Slack webhooks must be reachable without a session; the routes do their own
+  // HMAC verification + env gating.
+  "/api/slack",
 ];
 
 export async function updateSession(request: NextRequest) {

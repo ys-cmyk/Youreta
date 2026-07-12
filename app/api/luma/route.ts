@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { geocodePlace } from "@/lib/geocode";
 
 // Import a destination from a public Luma (lu.ma) event page — no Luma API and
 // no API key. We fetch the public HTML server-side, read JSON-LD Event data,
@@ -102,27 +103,6 @@ function extractMeta(html: string, property: string): string | null {
   return m2 ? m2[1] : null;
 }
 
-async function geocode(address: string): Promise<{ lat: number; lng: number } | null> {
-  if (!address.trim()) return null;
-  try {
-    const res = await fetch(
-      `https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1`,
-      { headers: { "User-Agent": "YourETA/1.0 (+https://youreta.vercel.app)" } }
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      features?: { geometry?: { coordinates?: [number, number] } }[];
-    };
-    const coords = json.features?.[0]?.geometry?.coordinates;
-    if (!coords) return null;
-    const [lng, lat] = coords;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -223,7 +203,8 @@ export async function POST(request: NextRequest) {
   // Fall back to geocoding the address (or venue name) if we have no coordinates.
   if (lat === null || lng === null) {
     const query = venueAddress || venueName;
-    const geo = await geocode(query);
+    // Behaviour-preserving: the Luma importer only needs coordinates here.
+    const geo = await geocodePlace(query);
     if (geo) {
       lat = geo.lat;
       lng = geo.lng;
